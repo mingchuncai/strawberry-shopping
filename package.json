@@ -26,6 +26,7 @@
     "globals": "^17.3.0",
     "npm-run-all2": "^8.0.4",
     "oxlint": "~1.50.0",
+    "sass": "^1.97.3",
     "unplugin-auto-import": "^21.0.0",
     "unplugin-vue-components": "^31.0.0",
     "vite": "^7.3.1",
