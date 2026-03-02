@@ -34,5 +34,10 @@
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"
+  },
+  "eslintConfig": {
+    "rules": {
+      "vue/multi-word-component-names": "false"
+    }
   }
 }

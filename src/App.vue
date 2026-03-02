@@ -1,7 +1,10 @@
-<script setup></script>
+<script setup>
+import { RouterView } from 'vue-router';
+
+</script>
 
 <template>
-  <el-button type="primary">Button</el-button>
+  <router-view />
 </template>
 
 <style scoped></style>
