@@ -5,12 +5,12 @@
         <dl>
           <dt>客户服务</dt>
           <dd><i class="iconfont icon-kefu"></i> 在线客服</dd>
-          <dd><i class="iconfont icon-question"></i> 问题反馈</dd>
+          <dd><i class="iconfont icon-wentifankui"></i> 问题反馈</dd>
         </dl>
         <dl>
           <dt>关注我们</dt>
-          <dd><i class="iconfont icon-weixin"></i> 公众号</dd>
-          <dd><i class="iconfont icon-weibo"></i> 微博</dd>
+          <dd><i class="iconfont icon-weixingongzhonghao"></i> 公众号</dd>
+          <dd><i class="iconfont icon-xinlangweibo"></i> 微博</dd>
         </dl>
         <dl>
           <dt>下载APP</dt>
@@ -31,15 +31,15 @@
       <div class="container">
         <div class="slogan">
           <a href="javascript:;">
-            <i class="iconfont icon-footer01"></i>
+            <i class="iconfont icon-express-package"></i>
             <span>价格亲民</span>
           </a>
           <a href="javascript:;">
-            <i class="iconfont icon-footer02"></i>
+            <i class="iconfont icon-dianzan1"></i>
             <span>物流快捷</span>
           </a>
           <a href="javascript:;">
-            <i class="iconfont icon-footer03"></i>
+            <i class="iconfont icon-kuaidiche"></i>
             <span>品质新鲜</span>
           </a>
         </div>

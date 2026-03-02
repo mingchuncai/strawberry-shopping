@@ -10,11 +10,11 @@ import { RouterLink } from 'vue-router'
       </h1>
 
       <div class="search">
-        <i class="iconfont icon-search"></i>
+        <i class="iconfont icon-souyisou"></i>
         <input type="text" placeholder="搜一搜">
       </div>
     </div>
-</header>
+  </header>
 </template>
 
 <style scoped lang='scss'>
@@ -24,6 +24,11 @@ import { RouterLink } from 'vue-router'
   .container {
     display: flex;
     align-items: center;
+    /* 新增：让子元素两端对齐，把搜索框推到右边 */
+    justify-content: space-between;
+    /* 可选：给容器一个固定宽度，避免在大屏上太分散 */
+    width: 1200px;
+    margin: 0 auto;
   }
 
   .logo {
@@ -45,7 +50,7 @@ import { RouterLink } from 'vue-router'
     border-bottom: 1px solid #e7e7e7;
     line-height: 32px;
 
-    .icon-search {
+    .icon-souyisou {
       font-size: 18px;
       margin-left: 5px;
     }
@@ -54,6 +59,8 @@ import { RouterLink } from 'vue-router'
       width: 140px;
       padding-left: 5px;
       color: #666;
+      border: none;
+      outline: none;
     }
   }
 
