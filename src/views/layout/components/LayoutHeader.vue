@@ -1,19 +1,9 @@
 <script setup>
 // 核心修复：引入 RouterLink 组件
 import { RouterLink } from 'vue-router';
-import { getCategoryAPI } from '@/apis/layout';
-import { onMounted, ref } from 'vue';
-
-const categorylist = ref([])
-const getCategory = async() => {
-    const res = await getCategoryAPI()
-    console.log('【分类接口】请求成功：', res)
-    categorylist.value = res.result
-}
-
-onMounted(()=>{
-  getCategory()
-})
+import { categoryStore} from '@/stores/category';
+//import { onMounted } from 'vue';
+const CategoryStore = categoryStore()
 </script>
 
 <template>
@@ -23,7 +13,7 @@ onMounted(()=>{
         <RouterLink to="/">小兔鲜</RouterLink>
       </h1>
       <ul class="app-header-nav">
-        <li class="home" v-for="item in categorylist" :key="item.id">
+        <li class="home" v-for="item in CategoryStore.categorylist" :key="item.id">
           <RouterLink to="/">{{item.name}}</RouterLink>
         </li>
       </ul>
