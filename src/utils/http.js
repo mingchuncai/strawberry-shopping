@@ -1,7 +1,7 @@
 //axios基础封装
 import axios from "axios";
 const httpinstance=axios.create({
-  baseURL:'https://jsonplaceholder.typicode.com',
+  baseURL:' http://pcapi-xiaotuxian-front-devtest.itheima.net',
   timeout:5000
 })
 

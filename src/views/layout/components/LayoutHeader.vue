@@ -1,5 +1,19 @@
 <script setup>
-import { RouterLink } from 'vue-router'
+// 核心修复：引入 RouterLink 组件
+import { RouterLink } from 'vue-router';
+import { getCategoryAPI } from '@/apis/layout';
+import { onMounted, ref } from 'vue';
+
+const categorylist = ref([])
+const getCategory = async() => {
+    const res = await getCategoryAPI()
+    console.log('【分类接口】请求成功：', res)
+    categorylist.value = res.result
+}
+
+onMounted(()=>{
+  getCategory()
+})
 </script>
 
 <template>
@@ -8,7 +22,11 @@ import { RouterLink } from 'vue-router'
       <h1 class="logo">
         <RouterLink to="/">小兔鲜</RouterLink>
       </h1>
-
+      <ul class="app-header-nav">
+        <li class="home" v-for="item in categorylist" :key="item.id">
+          <RouterLink to="/">{{item.name}}</RouterLink>
+        </li>
+      </ul>
       <div class="search">
         <i class="iconfont icon-souyisou"></i>
         <input type="text" placeholder="搜一搜">
@@ -17,6 +35,7 @@ import { RouterLink } from 'vue-router'
   </header>
 </template>
 
+
 <style scoped lang='scss'>
 .app-header {
   background: #fff;
@@ -24,9 +43,7 @@ import { RouterLink } from 'vue-router'
   .container {
     display: flex;
     align-items: center;
-    /* 新增：让子元素两端对齐，把搜索框推到右边 */
     justify-content: space-between;
-    /* 可选：给容器一个固定宽度，避免在大屏上太分散 */
     width: 1200px;
     margin: 0 auto;
   }
@@ -40,6 +57,27 @@ import { RouterLink } from 'vue-router'
       width: 100%;
       text-indent: -9999px;
       background: url('@/assets/images/logo.png') no-repeat center 18px / contain;
+    }
+  }
+
+  .app-header-nav {
+    display: flex;
+    gap: 25px;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+    margin-left: 40px;
+
+    li {
+      a {
+        text-decoration: none;
+        color: #333;
+        font-size: 16px;
+        &:hover {
+          color: #27ba9b;
+        }
+      }
     }
   }
 
@@ -95,3 +133,4 @@ import { RouterLink } from 'vue-router'
   }
 }
 </style>
+
