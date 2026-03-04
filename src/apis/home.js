@@ -16,3 +16,14 @@ export function getnewapi(){
     url:'/home/new'
   })
 }
+
+/**
+ * @description: 获取人气推荐
+ * @param {*}
+ * @return {*}
+ */
+export function gethotapi(){
+  return httpinstance({
+    url:'/home/hot'
+  })
+}
