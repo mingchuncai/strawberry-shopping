@@ -3,6 +3,13 @@ import { ref, onMounted } from 'vue'
 //import GoodsItem from '@/components/GoodsItem.vue'
 import { getCategoryapi } from '@/apis/category';
 import { useRoute } from 'vue-router'
+import { getbannerapi } from '@/apis/home';
+const bannerlist=ref([])
+
+const getbanner=(async ()=>{
+  const res = await getbannerapi({ distributionSite: '2' })
+  bannerlist.value = res.result
+})
 
 const categoryData = ref({})
 const route = useRoute()
@@ -12,6 +19,7 @@ const getCategory = async() => {
 }
 onMounted(() => {
   getCategory()
+  getbanner()
 })
 </script>
 
@@ -24,6 +32,14 @@ onMounted(() => {
           <el-breadcrumb-item :to="{ path: '/' }">首页</el-breadcrumb-item>
           <el-breadcrumb-item>{{ categoryData.name }}</el-breadcrumb-item>
         </el-breadcrumb>
+      </div>
+      <!-- 轮播图 -->
+      <div class="home-banner">
+        <el-carousel height="500px">
+          <el-carousel-item v-for="item in bannerlist" :key="item.id">
+            <img :src="item.imgUrl" alt="">
+          </el-carousel-item>
+        </el-carousel>
       </div>
     </div>
   </div>

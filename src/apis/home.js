@@ -1,8 +1,13 @@
 import httpinstance from '@/utils/http'
 
-export function getbannerapi(){
+export function getbannerapi(params={}){
+  //默认为1，商品为2
+  const {distributionSite='1'}=params
   return httpinstance({
-    url:'/home/banner'
+    url:'/home/banner',
+    params:{
+      distributionSite
+    }
   })
 }
 
