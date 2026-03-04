@@ -5,3 +5,14 @@ export function getbannerapi(){
     url:'/home/banner'
   })
 }
+
+/**
+ * @description: 获取新鲜好物
+ * @param {*}
+ * @return {*}
+ */
+export function getnewapi(){
+  return httpinstance({
+    url:'/home/new'
+  })
+}
