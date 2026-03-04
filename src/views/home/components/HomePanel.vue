@@ -6,8 +6,7 @@ defineProps({
     default: '标题'
   },
   subtitle:{
-    type: String,
-    default: '副标题'
+    type: String
   }
 })
 </script>

@@ -27,3 +27,14 @@ export function gethotapi(){
     url:'/home/hot'
   })
 }
+
+/**
+ * @description: 获取商品数据
+ * @param {*}
+ * @return {*}
+ */
+export const getgoodsapi=()=>{
+  return httpinstance({
+    url:'/home/goods'
+  })
+}
