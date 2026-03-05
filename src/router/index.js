@@ -4,6 +4,7 @@ import layout from '@/views/layout/LayoutIndex.vue'
 import home from '@/views/home/HomeIndex.vue'
 import category from '@/views/category/CategoryIndex.vue'
 import subcategory from '@/views/SubCategory/SubCategoryIndex.vue'
+import detail from '@/views/detail/DetailIndex.vue'
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -22,6 +23,10 @@ const router = createRouter({
         {
           path:'category/sub/:id',
           component:subcategory
+        },
+        {
+          path:'detail/:id',
+          component:detail
         }
       ]
     },
