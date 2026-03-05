@@ -4,23 +4,28 @@ import GoodsItem from '@/views/home/components/GoodsItem.vue'
 import { getCategoryapi } from '@/apis/category'
 import { useRoute } from 'vue-router'
 import { getbannerapi } from '@/apis/home'
-const bannerlist=ref([])
-const categoryData = ref({})
-const route = useRoute()
+import { onBeforeRouteUpdate } from 'vue-router'
 
+const bannerlist=ref([])
 const getbanner=(async ()=>{
   const res = await getbannerapi({ distributionSite: '2' })
   bannerlist.value = res.result
 })
+onMounted(() => {
+  getbanner()
+})
 
-
-const getCategory = async() => {
-  const res = await getCategoryapi(route.params.id)
+const categoryData = ref({})
+const route = useRoute()
+const getCategory = async(id=route.params.id) => {
+  const res = await getCategoryapi(id)
   categoryData.value = res.result
 }
 onMounted(() => {
   getCategory()
-  getbanner()
+})
+onBeforeRouteUpdate((to) => {
+  getCategory(to.params.id)
 })
 </script>
 
