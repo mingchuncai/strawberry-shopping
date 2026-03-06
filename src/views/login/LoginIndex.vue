@@ -1,14 +1,18 @@
 <script setup>
 //表单校验 {账号名＋密码}
 import { ref} from 'vue'
-import {loginapi} from '@/apis/user'
 import {ElMessage} from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import {useRouter} from 'vue-router'
+
+import {userStore} from '@/stores/user'
+
+const userstore = userStore()
+
 //1.准备表单对象
 const form=ref({
-  account:'',
-  password:'',
+  account:'xiaotuxian001',
+  password:'123456',
   agree:true
 })
 
@@ -46,8 +50,7 @@ const dologin=()=>{
     console.log(valid)
     if(valid){
       //login
-      const res =await loginapi(account,password)
-      console.log(res)
+      await userstore.getuserinfo({account,password})
       //提示
       ElMessage({type:'success',message:'登录成功'})
       //跳转
