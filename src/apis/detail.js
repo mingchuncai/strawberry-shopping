@@ -8,3 +8,14 @@ export const getdetail = (id) =>{
     }
   })
 }
+
+export const getHotGoodsAPI=(id,type,limit = 3)=>{
+  return httpinstance({
+    url:'/goods/hot',
+    params:{
+      id,
+      type,
+      limit
+    }
+  })
+}
