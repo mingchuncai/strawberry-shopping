@@ -1,7 +1,10 @@
 <script setup>
 //表单校验 {账号名＋密码}
 import { ref} from 'vue'
-
+import {loginapi} from '@/apis/user'
+import {ElMessage} from 'element-plus'
+import 'element-plus/es/components/message/style/css'
+import {useRouter} from 'vue-router'
 //1.准备表单对象
 const form=ref({
   account:'',
@@ -35,12 +38,22 @@ const rules={
 
 //3.获取form实例做统一校验
 const formref=ref(null)
+const router=useRouter()
 const dologin=()=>{
-  formref.value.validate((valid)=>{
+  const {account,password}=form.value
+  formref.value.validate(async(valid)=>{
     //valid：所有都通过校验,true
     console.log(valid)
+    if(valid){
+      //login
+      const res =await loginapi(account,password)
+      console.log(res)
+      //提示
+      ElMessage({type:'success',message:'登录成功'})
+      //跳转
+      router.replace('/')
+    }
   })
-
 }
 </script>
 
