@@ -18,13 +18,18 @@ const enterhandeler = (i) => {
 
 //获取鼠标相对位置
 const target = ref(null)
+const { elementX, elementY, isOutside } = useMouseInElement(target)
+
+const positionX = ref(0)
+const positionY = ref(0)
 const  left = ref(0)
 const  top = ref(0)
-const { elementX, elementY, isOutside } = useMouseInElement(target)
+
 
 //控制滑块随鼠标移动
 //有效区间
-watch([elementX,elementY],()=>{
+watch([elementX,elementY,isOutside],()=>{
+  if(isOutside) return
   //横
   if (elementX.value>100&&elementX.value<300){
     left.value = elementX.value-100
@@ -40,6 +45,12 @@ if(elementX.value>300){left.value = 200}
 if(elementX.value<100){left.value = 0}
 if(elementY.value>300){top.value = 200}
 if(elementY.value<100){top.value = 0}
+
+
+//控制大图的展示
+  positionX.value = -left.value*2
+  positionY.value = -top.value*2
+
   })
 
 
@@ -53,7 +64,7 @@ if(elementY.value<100){top.value = 0}
     <div class="middle" ref="target">
       <img :src="imageList[activeIndex]" alt="" />
       <!-- 蒙层小滑块 -->
-      <div class="layer"  :style="{ left: `${left}px`, top: `${top}px` }"></div>
+      <div class="layer" v-show="!isOutside"  :style="{ left: `${left}px`, top: `${top}px` }"></div>
     </div>
     <!-- 小图列表 -->
     <ul class="small">
@@ -64,11 +75,11 @@ if(elementY.value<100){top.value = 0}
     <!-- 放大镜大图 -->
     <div class="large" :style="[
       {
-        backgroundImage: `url(${imageList[0]})`,
-        backgroundPositionX: `0px`,
-        backgroundPositionY: `0px`,
+        backgroundImage: `url(${imageList[activeIndex]})`,
+        backgroundPositionX: `${positionX}px`,
+        backgroundPositionY: `${positionY}px`,
       },
-    ]" v-show="false"></div>
+    ]" v-show="!isOutside"></div>
   </div>
 </template>
 
