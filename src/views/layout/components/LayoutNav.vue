@@ -6,7 +6,7 @@ const router = useRouter()
 const userstore = userStore()
 const confirm = () => {
   console.log('用户要退出登录了')
-  userstore.clearUserInfo()
+  userstore.clearuserinfo()
   router.push('/login')
 }
 </script>
