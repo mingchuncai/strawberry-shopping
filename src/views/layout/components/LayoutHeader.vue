@@ -2,6 +2,7 @@
 // 核心修复：引入 RouterLink 组件
 import { RouterLink } from 'vue-router';
 import { categoryStore} from '@/stores/category';
+import HeaderCart from '@/views/layout/components/HeaderCart.vue';
 //import { onMounted } from 'vue';
 const CategoryStore = categoryStore()
 </script>
@@ -24,6 +25,8 @@ const CategoryStore = categoryStore()
         <i class="iconfont icon-souyisou"></i>
         <input type="text" placeholder="搜一搜">
       </div>
+      <!-- 购物车 -->
+       <HeaderCart />
     </div>
   </header>
 </template>
