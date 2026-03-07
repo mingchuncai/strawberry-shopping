@@ -1,8 +1,14 @@
 <script setup>
 import {userStore} from '@/stores/user'
+import { useRouter } from 'vue-router'
 
+const router = useRouter()
 const userstore = userStore()
-
+const confirm = () => {
+  console.log('用户要退出登录了')
+  userstore.clearUserInfo()
+  router.push('/login')
+}
 </script>
 
 <template>
