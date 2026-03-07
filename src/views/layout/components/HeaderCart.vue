@@ -25,7 +25,7 @@ const cartstore=usecartstore()
               <p class="count">x{{ i.count }}</p>
             </div>
           </RouterLink>
-          <i class="iconfont icon-close-new"  ></i>
+          <i class="iconfont icon-shanchu" @click="cartstore.deletecart(i.skuId)" ></i>
         </div>
 
       </div>

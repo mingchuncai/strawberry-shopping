@@ -14,7 +14,11 @@ export const usecartstore=defineStore('cart',()=>{
     item.count++
   }
 }
-  return {cartList,addcart}
+const deletecart=(skuId)=>{
+  const idx=cartList.value.findIndex((item)=>skuId===item.skuId)
+  cartList.value.splice(idx,1)
+}
+  return {cartList,addcart,deletecart}
 },
 {
   persist:true
