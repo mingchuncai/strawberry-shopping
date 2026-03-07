@@ -3,6 +3,8 @@ import axios from "axios";
 import {ElMessage} from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import {userStore} from '@/stores/user'
+import router from "@/router";
+
 const httpinstance=axios.create({
   baseURL:' http://pcapi-xiaotuxian-front-devtest.itheima.net',
   timeout:5000
@@ -30,6 +32,14 @@ httpinstance.interceptors.response.use(res=>res.data,e=>{
       message:e.response.data.message
     }
   )
+  //401
+  //清除本地数据
+  //跳转登录页
+  if(e.response.status===401){
+    userStore().clearuserinfo()
+    //跳转登录页
+    router.push('/login')
+  }
   return Promise.reject(e)
 } )
 export default httpinstance
