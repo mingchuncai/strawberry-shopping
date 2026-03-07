@@ -18,12 +18,17 @@ const deletecart=(skuId)=>{
   const idx=cartList.value.findIndex((item)=>skuId===item.skuId)
   cartList.value.splice(idx,1)
 }
+//单选
+const singleCheckcmc =(skuId,selected)=>{
+  const item=cartList.value.find((item)=>item.skuId===skuId)
+  item.selected=selected
+}
 //caculate
 //count
 const allcount=computed(()=>cartList.value.reduce((a,c)=>a+c.count,0))
 const allprice=computed(()=>cartList.value.reduce((a,c)=>a+c.count*c.price,0))
 
-return {cartList,addcart,deletecart,allcount,allprice}
+return {cartList,addcart,deletecart,allcount,allprice,singleCheckcmc}
 },
 {
   persist:true
