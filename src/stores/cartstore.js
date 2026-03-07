@@ -35,7 +35,11 @@ const isall=computed(()=>
 const allcheckcmc=(selected)=>{
   cartList.value.forEach((item)=>item.selected=selected)
 }
-return {cartList,addcart,deletecart,allcount,allprice,singleCheckcmc,isall,allcheckcmc}
+//caculate selected
+const selectedCount=computed(()=>cartList.value.filter((item)=>item.selected).reduce((a,c)=>a+c.count,0))
+const selectedPrice=computed(()=>cartList.value.filter((item)=>item.selected).reduce((a,c)=>a+c.count*c.price,0))
+
+return {cartList,addcart,deletecart,allcount,allprice,singleCheckcmc,isall,allcheckcmc,selectedCount,selectedPrice}
 },
 {
   persist:true
