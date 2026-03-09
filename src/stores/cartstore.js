@@ -2,19 +2,23 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {userStore} from './user'
-import {insertcartapi,findNewCartListAPI} from '@/apis/cart'
+import {insertcartapi,findNewCartListAPI,delcartapi} from '@/apis/cart'
 export const usecartstore=defineStore('cart',()=>{
   const userstore=userStore()
   const islogin=computed(()=>userstore.userInfo.token)
   //state
   const cartList = ref([])
+  //获取最新购物车列表
+  const updatenewlist=async()=>{
+    const res=await findNewCartListAPI()
+    cartList.value=res.result
+  }
   //action
   const addcart=async(goods)=>{
     const {skuId,count}=goods
     if(islogin.value){
       await insertcartapi({skuId,count})
-      const res=await findNewCartListAPI()
-      cartList.value=res.result
+      updatenewlist()
     }else{
       const item=cartList.value.find((item)=>goods.skuId===item.skuId)
     if(!item){
@@ -25,6 +29,19 @@ export const usecartstore=defineStore('cart',()=>{
     }
 
 }
+//删除
+  const delcart=async(skuId)=>{
+    if(islogin.value){
+      //调用接口实现删除
+      await delcartapi([skuId])
+      updatenewlist()
+    }else{
+      const idx=cartList.value.find((item)=>skuId===item.skuId)
+      cartList.value.splice(idx,1)
+    }
+  }
+
+
 const deletecart=(skuId)=>{
   const idx=cartList.value.findIndex((item)=>skuId===item.skuId)
   cartList.value.splice(idx,1)
@@ -50,7 +67,7 @@ const allcheckcmc=(selected)=>{
 const selectedCount=computed(()=>cartList.value.filter((item)=>item.selected).reduce((a,c)=>a+c.count,0))
 const selectedPrice=computed(()=>cartList.value.filter((item)=>item.selected).reduce((a,c)=>a+c.count*c.price,0))
 
-return {cartList,addcart,deletecart,allcount,allprice,singleCheckcmc,isall,allcheckcmc,selectedCount,selectedPrice}
+return {cartList,addcart,deletecart,allcount,allprice,singleCheckcmc,isall,allcheckcmc,selectedCount,selectedPrice,delcart}
 },
 {
   persist:true

@@ -40,3 +40,13 @@ export const mergeCartAPI = (data) => {
     data
   })
 }
+
+export const delcartapi=(ids)=>{
+  return request({
+    url:'/member/cart',
+    method:'DELETE',
+    data:{
+      ids
+    }
+  })
+}
