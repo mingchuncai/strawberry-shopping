@@ -30,16 +30,19 @@ export const usecartstore=defineStore('cart',()=>{
 
 }
 //删除
-  const delcart=async(skuId)=>{
-    if(islogin.value){
-      //调用接口实现删除
-      await delcartapi([skuId])
-      updatenewlist()
-    }else{
-      const idx=cartList.value.find((item)=>skuId===item.skuId)
+const delcart=async(skuId)=>{
+  if(islogin.value){
+    // 登录态：调用后端接口+刷新列表
+    await delcartapi([skuId])
+    await updatenewlist() // 加await，确保列表刷新完成
+  }else{
+    // 未登录态：修正find→findIndex，且校验索引有效性
+    const idx=cartList.value.findIndex((item)=>skuId===item.skuId)
+    if(idx > -1){ // 避免索引为-1（没找到）时报错
       cartList.value.splice(idx,1)
     }
   }
+}
 
 
 const deletecart=(skuId)=>{
