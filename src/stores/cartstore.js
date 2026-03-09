@@ -46,6 +46,11 @@ const deletecart=(skuId)=>{
   const idx=cartList.value.findIndex((item)=>skuId===item.skuId)
   cartList.value.splice(idx,1)
 }
+
+//退出登录，清除购物车
+const clearcart=()=>{
+  cartList.value=[]
+}
 //单选
 const singleCheckcmc =(skuId,selected)=>{
   const item=cartList.value.find((item)=>item.skuId===skuId)
@@ -67,7 +72,8 @@ const allcheckcmc=(selected)=>{
 const selectedCount=computed(()=>cartList.value.filter((item)=>item.selected).reduce((a,c)=>a+c.count,0))
 const selectedPrice=computed(()=>cartList.value.filter((item)=>item.selected).reduce((a,c)=>a+c.count*c.price,0))
 
-return {cartList,addcart,deletecart,allcount,allprice,singleCheckcmc,isall,allcheckcmc,selectedCount,selectedPrice,delcart}
+return {
+  cartList,addcart,deletecart,allcount,allprice,singleCheckcmc,isall,allcheckcmc,selectedCount,selectedPrice,delcart,clearcart}
 },
 {
   persist:true
