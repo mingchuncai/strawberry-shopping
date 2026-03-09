@@ -43,20 +43,26 @@ const rules={
 //3.获取form实例做统一校验
 const formref=ref(null)
 const router=useRouter()
-const dologin=()=>{
-  const {account,password}=form.value
-  formref.value.validate(async(valid)=>{
-    //valid：所有都通过校验,true
-    console.log(valid)
-    if(valid){
-      //login
-      await userstore.getuserinfo({account,password})
-      //提示
-      ElMessage({type:'success',message:'登录成功'})
-      //跳转
-      router.replace('/')
-    }
-  })
+const dologin=async()=>{
+  try {
+    // 1. 改用 Promise 写法校验表单（Element Plus 官方推荐）
+    const valid = await formref.value.validate()
+    if (!valid) return // 校验失败直接返回
+
+    // 2. 解构账号密码
+    const {account,password}=form.value
+
+    // 3. 调用登录方法（捕获内部异常）
+    await userstore.getuserinfo({account,password})
+
+    // 4. 登录成功提示 + 跳转（能执行到这步说明无异常）
+    ElMessage({type:'success',message:'登录成功'})
+    router.replace('/')
+  } catch (error) {
+    // 捕获所有异常：表单校验失败、登录接口报错、合并购物车报错
+    console.error('登录失败：', error)
+    ElMessage({type:'error',message:'登录失败，请检查账号密码或网络'})
+  }
 }
 </script>
 
