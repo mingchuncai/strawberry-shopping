@@ -1,8 +1,14 @@
 <script setup>
-import {getcheckinfoapi} from "@/apis/checkout"
+import {getcheckinfoapi,createorderapi} from "@/apis/checkout"
+import {useRouter} from 'vue-router'
 import { onMounted, ref } from "vue";
+import {usecartstore} from "@/stores/cartstore"
+import {ElMessage} from 'element-plus'
 const checkinfo=ref({})
 const curaddress=ref({})
+const router=useRouter()
+const cartstore=usecartstore()
+
 const getcheckinfo=async()=>{
   const res=await getcheckinfoapi()
   checkinfo.value=res.result
@@ -10,6 +16,9 @@ const getcheckinfo=async()=>{
   curaddress.value=item
 }
 
+onMounted(()=>{
+  getcheckinfo()
+})
 //控制弹窗
 const showDialog=ref(false)
 
@@ -25,9 +34,35 @@ const confirm=()=>{
   showDialog.value=false
   activeaddress.value={}
 }
-onMounted(()=>{
-  getcheckinfo()
-})
+
+//createorder
+const createorder=async()=>{
+  const res=await createorderapi({
+    deliveryTimeType:1,
+    payType:1,
+    payChannel:1,
+    buyerMessage:'',
+    goods:checkinfo.value.goods.map(item=>{
+      return {
+        skuId:item.skuId,
+        count:item.count
+      }
+    }),
+    addressId:curaddress.value.id
+  })
+  const orderId=res.result.id
+  await cartstore.updatenewlist()
+  //refresh shoppingcart
+  ElMessage.success('订单创建成功，即将跳转到支付页面')
+  router.push({
+    path:'/pay',
+    query:{
+      id:orderId
+    }
+  })
+}
+
+
 </script>
 
 <template>
@@ -77,7 +112,7 @@ onMounted(()=>{
                   </a>
                 </td>
                 <td>¥{{ i.price }}</td>
-                <td>{{ i.price }}</td>
+                <td>{{ i.count }}</td>
                 <td>¥{{ i.totalPrice }}</td>
                 <td>¥{{ i.totalPayPrice }}</td>
               </tr>
@@ -122,7 +157,7 @@ onMounted(()=>{
         </div>
         <!-- 提交订单 -->
         <div class="submit">
-          <el-button  type="primary" size="large">提交订单</el-button>
+          <el-button @click="createorder" type="primary" size="large">提交订单</el-button>
         </div>
       </div>
     </div>

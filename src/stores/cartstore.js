@@ -18,7 +18,7 @@ export const usecartstore=defineStore('cart',()=>{
     const {skuId,count}=goods
     if(islogin.value){
       await insertcartapi({skuId,count})
-      updatenewlist()
+      await updatenewlist()
     }else{
       const item=cartList.value.find((item)=>goods.skuId===item.skuId)
     if(!item){
