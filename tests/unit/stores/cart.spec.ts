@@ -13,8 +13,8 @@ vi.mock('@/api/cart', () => api)
 vi.mock('@/api/user', () => ({ loginapi: vi.fn() }))
 vi.mock('element-plus', () => ({ ElMessage: vi.fn() }))
 
-import { usecartstore } from '@/stores/cartstore'
-import { userStore } from '@/stores/user'
+import { useCartStore } from '@/stores/cart'
+import { useUserStore } from '@/stores/user'
 
 const item = (overrides = {}) => ({
   skuId: 'sku-1',
@@ -35,7 +35,7 @@ describe('cart store', () => {
   })
 
   it('adds the requested count for a duplicate guest SKU', async () => {
-    const cart = usecartstore()
+    const cart = useCartStore()
     const cartList = cart.cartList as Array<ReturnType<typeof item>>
     await cart.addcart(item({ count: 2 }) as never)
     await cart.addcart(item({ count: 3 }) as never)
@@ -45,11 +45,11 @@ describe('cart store', () => {
   })
 
   it('does not report an empty cart as all selected', () => {
-    expect(usecartstore().isall).toBe(false)
+    expect(useCartStore().isall).toBe(false)
   })
 
   it('treats deleting a missing guest SKU as a no-op', async () => {
-    const cart = usecartstore()
+    const cart = useCartStore()
     const cartList = cart.cartList as Array<ReturnType<typeof item>>
     cartList.push(item(), item({ skuId: 'sku-2' }))
 
@@ -59,8 +59,8 @@ describe('cart store', () => {
   })
 
   it('persists authenticated selection, count and deletion by skuId', async () => {
-    userStore().userInfo = { id: 'user-1', account: 'berry', token: 'token-1' }
-    const cart = usecartstore()
+    useUserStore().userInfo = { id: 'user-1', account: 'berry', token: 'token-1' }
+    const cart = useCartStore()
     ;(cart.cartList as Array<ReturnType<typeof item>>).push(item())
 
     await cart.setSelected('sku-1', false)

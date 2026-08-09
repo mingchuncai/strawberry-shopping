@@ -3,9 +3,8 @@ import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 
 import router from '@/router'
-import { userStore } from '@/stores/user'
+import { useUserStore } from '@/stores/user'
 import type { ApiResponse, AppError, AppErrorCode } from '@/types/api'
-import type { UserSession } from '@/types/domain'
 
 const DEVELOPMENT_API_URL = 'http://pcapi-xiaotuxian-front-devtest.itheima.net'
 
@@ -33,7 +32,7 @@ export const normalizeAppError = (cause: unknown): AppError => {
 }
 
 httpInstance.interceptors.request.use((config) => {
-  const token = (userStore().userInfo as Partial<UserSession>)?.token
+  const token = useUserStore().userInfo?.token
   if (token) config.headers.Authorization = `Bearer ${token}`
   return config
 })
@@ -45,7 +44,7 @@ httpInstance.interceptors.response.use(
     ElMessage({ type: 'error', message: error.message })
     if (error.code === 'UNAUTHORIZED') {
       const redirect = router.currentRoute.value.fullPath
-      userStore().clearuserinfo()
+      useUserStore().clearuserinfo()
       void router.push({ path: '/login', query: { redirect } })
     }
     return Promise.reject(error)

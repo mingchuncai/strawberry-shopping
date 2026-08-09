@@ -1,6 +1,6 @@
 <script setup>
-import { usecartstore } from '@/stores/cartstore'
-const cartStore = usecartstore()
+import { useCartStore } from '@/stores/cart'
+const cartStore = useCartStore()
 //单选回调
 const singleCheck = (i,selected) => {
   cartStore.setSelected(i.skuId,selected)

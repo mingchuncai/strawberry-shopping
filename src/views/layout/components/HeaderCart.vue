@@ -1,6 +1,6 @@
 <script setup>
-import {usecartstore} from "@/stores/cartstore"
-const cartstore=usecartstore()
+import {useCartStore} from "@/stores/cart"
+const cartstore=useCartStore()
 </script>
 
 <template>
@@ -25,7 +25,7 @@ const cartstore=usecartstore()
               <p class="count">x{{ i.count }}</p>
             </div>
           </RouterLink>
-          <i class="iconfont icon-shanchu" @click="cartstore.deletecart(i.skuId)" ></i>
+          <i class="iconfont icon-shanchu" @click="cartstore.delcart(i.skuId)" ></i>
         </div>
 
       </div>

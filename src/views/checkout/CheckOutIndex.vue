@@ -2,12 +2,12 @@
 import {getcheckinfoapi,createorderapi} from "@/api/checkout"
 import {useRouter} from 'vue-router'
 import { onMounted, ref } from "vue";
-import {usecartstore} from "@/stores/cartstore"
+import {useCartStore} from "@/stores/cart"
 import {ElMessage} from 'element-plus'
 const checkinfo=ref({})
 const curaddress=ref({})
 const router=useRouter()
-const cartstore=usecartstore()
+const cartstore=useCartStore()
 
 const getcheckinfo=async()=>{
   const res=await getcheckinfoapi()

@@ -2,7 +2,7 @@
 import axios from "axios";
 import {ElMessage} from 'element-plus'
 import 'element-plus/es/components/message/style/css'
-import {userStore} from '@/stores/user'
+import {useUserStore} from '@/stores/user'
 import router from "@/router";
 
 const httpinstance=axios.create({
@@ -15,7 +15,7 @@ const httpinstance=axios.create({
 //axios请求拦截器
 httpinstance.interceptors.request.use(config=>{
   //1.从pinia get token
-  const userstore=userStore()
+  const userstore=useUserStore()
   //2.拼接token
   const token=userstore.userInfo.token
   if(token){
@@ -39,7 +39,7 @@ httpinstance.interceptors.response.use(res=>res.data,e=>{
   //清除本地数据
   //跳转登录页
   if(status===401){
-    userStore().clearuserinfo()
+    useUserStore().clearuserinfo()
     router.push({
       path:'/login',
       query:{redirect:router.currentRoute.value.fullPath}

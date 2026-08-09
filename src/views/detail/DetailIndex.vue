@@ -4,9 +4,9 @@ import { ref, onMounted } from "vue"
 import { useRoute } from "vue-router";
 import DetailHot from "./components/DetailHot.vue";
 import { ElMessage } from "element-plus";
-import {usecartstore} from "@/stores/cartstore"
+import {useCartStore} from "@/stores/cart"
 
-const cartstore=usecartstore()
+const cartstore=useCartStore()
 const route = useRoute()
 const goods = ref({})
 const getgoods = async()=>{

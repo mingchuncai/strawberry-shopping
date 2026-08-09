@@ -1,9 +1,9 @@
 <script setup>
-import {userStore} from '@/stores/user'
+import {useUserStore} from '@/stores/user'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
-const userstore = userStore()
+const userstore = useUserStore()
 const confirm = () => {
   console.log('用户要退出登录了')
   userstore.clearuserinfo()

@@ -5,9 +5,9 @@ import {ElMessage} from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import {useRouter} from 'vue-router'
 
-import {userStore} from '@/stores/user'
+import {useUserStore} from '@/stores/user'
 
-const userstore = userStore()
+const userstore = useUserStore()
 
 //1.准备表单对象
 const form=ref({

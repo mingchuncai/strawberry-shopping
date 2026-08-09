@@ -20,7 +20,7 @@ vi.mock('@/api/cart', () => ({
 }))
 
 import { httpInstance as http } from '@/api/http'
-import { userStore } from '@/stores/user'
+import { useUserStore } from '@/stores/user'
 
 describe('HTTP error handling', () => {
   beforeEach(() => {
@@ -41,7 +41,7 @@ describe('HTTP error handling', () => {
   })
 
   it('preserves the full requested route when redirecting after a 401', async () => {
-    userStore().userInfo = { token: 'expired' }
+    useUserStore().userInfo = { id: 'user-1', account: 'berry', token: 'expired' }
     const request = http.get('/protected', {
       adapter: async () =>
         Promise.reject({
@@ -51,7 +51,7 @@ describe('HTTP error handling', () => {
     })
 
     await expect(request).rejects.toMatchObject({ code: 'UNAUTHORIZED' })
-    expect(userStore().userInfo).toEqual({})
+    expect(useUserStore().userInfo).toBeNull()
     expect(router.push).toHaveBeenCalledWith({
       path: '/login',
       query: { redirect: '/checkout?coupon=berry' },
