@@ -33,17 +33,17 @@ export interface RecommendationGroup {
 }
 
 export interface OperationConfirmation {
-  id: string
-  operation: 'add_to_cart'
-  productId: string
-  skuId: string
-  productName: string
-  attrsText: string
-  quantity: number
-  unitPrice: number
-  totalPrice: number
-  payloadHash: string
-  idempotencyKey: string
+  readonly id: string
+  readonly operation: 'add_to_cart'
+  readonly productId: string
+  readonly skuId: string
+  readonly productName: string
+  readonly attrsText: string
+  readonly quantity: number
+  readonly unitPrice: number
+  readonly totalPrice: number
+  readonly payloadHash: string
+  readonly idempotencyKey: string
 }
 
 export type AgentEvent =

@@ -260,6 +260,40 @@ const gapError = (afterEventId: number): AppError => ({
 const toAppErrorCode = (code: string): AppErrorCode =>
   appErrorCodes.has(code as AppErrorCode) ? (code as AppErrorCode) : 'API_ERROR'
 
+const cloneConfirmation = (confirmation: OperationConfirmation): OperationConfirmation =>
+  Object.freeze({
+    id: confirmation.id,
+    operation: confirmation.operation,
+    productId: confirmation.productId,
+    skuId: confirmation.skuId,
+    productName: confirmation.productName,
+    attrsText: confirmation.attrsText,
+    quantity: confirmation.quantity,
+    unitPrice: confirmation.unitPrice,
+    totalPrice: confirmation.totalPrice,
+    payloadHash: confirmation.payloadHash,
+    idempotencyKey: confirmation.idempotencyKey,
+  })
+
+const confirmationFields: (keyof OperationConfirmation)[] = [
+  'id',
+  'operation',
+  'productId',
+  'skuId',
+  'productName',
+  'attrsText',
+  'quantity',
+  'unitPrice',
+  'totalPrice',
+  'payloadHash',
+  'idempotencyKey',
+]
+
+const confirmationChanged = (
+  previous: OperationConfirmation,
+  next: OperationConfirmation,
+): boolean => confirmationFields.some((field) => previous[field] !== next[field])
+
 export const reduceAgentEvent = (
   state: AgentProtocolState,
   event: AgentEvent,
@@ -327,10 +361,13 @@ export const reduceAgentEvent = (
       return { state: { ...nextState, recommendationGroups: event.groups }, effects: [] }
     case 'confirmation.requested': {
       const previous = state.pendingConfirmation
-      const isReplacement = previous &&
-        (previous.id !== event.confirmation.id || previous.payloadHash !== event.confirmation.payloadHash)
+      const isReplacement = previous && confirmationChanged(previous, event.confirmation)
       return {
-        state: { ...nextState, stage: 'WAIT_CONFIRMATION', pendingConfirmation: event.confirmation },
+        state: {
+          ...nextState,
+          stage: 'WAIT_CONFIRMATION',
+          pendingConfirmation: cloneConfirmation(event.confirmation),
+        },
         effects: isReplacement ? [{ type: 'confirmation.invalidated', confirmationId: previous.id }] : [],
       }
     }

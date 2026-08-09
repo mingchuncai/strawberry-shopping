@@ -119,4 +119,51 @@ describe('agent event protocol', () => {
     expect(second.state.pendingConfirmation).toEqual(replacement)
     expect(second.effects).toEqual([{ type: 'confirmation.invalidated', confirmationId: 'confirmation-1' }])
   })
+
+  it('stores a confirmation snapshot isolated from subsequent caller mutation', () => {
+    const mutableConfirmation = { ...confirmation }
+    const result = reduceAgentEvent(initialAgentProtocolState, {
+      id: 1,
+      type: 'confirmation.requested',
+      confirmation: mutableConfirmation,
+    })
+
+    mutableConfirmation.productId = 'product-mutated'
+    mutableConfirmation.quantity = 9
+
+    expect(result.state.pendingConfirmation).toMatchObject({
+      productId: 'product-1',
+      quantity: 1,
+    })
+  })
+
+  it.each([
+    ['productId', 'product-2'],
+    ['skuId', 'sku-2'],
+    ['quantity', 2],
+    ['unitPrice', 499],
+    ['totalPrice', 499],
+    ['operation', 'remove_from_cart'],
+    ['payloadHash', 'payload-2'],
+    ['idempotencyKey', 'operation-2'],
+  ] as const)(
+    'invalidates a pending confirmation when its %s changes despite a stable confirmation ID',
+    (field, value) => {
+      const first = reduceAgentEvent(initialAgentProtocolState, {
+        id: 1,
+        type: 'confirmation.requested',
+        confirmation,
+      })
+      const changedConfirmation = { ...confirmation, [field]: value } as typeof confirmation
+      const result = reduceAgentEvent(first.state, {
+        id: 2,
+        type: 'confirmation.requested',
+        confirmation: changedConfirmation,
+      })
+
+      expect(result.effects).toEqual([
+        { type: 'confirmation.invalidated', confirmationId: 'confirmation-1' },
+      ])
+    },
+  )
 })
