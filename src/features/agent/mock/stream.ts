@@ -1,7 +1,7 @@
 import { parseAgentEvent } from '../protocol'
 import type { AgentEvent, AgentTransport } from '../types'
 
-import { quietDormitoryCoffeeScenario } from './scenarios'
+import { createQuietDormitoryCoffeeScenario } from './scenarios'
 
 export class MockStreamDisconnectedError extends Error {
   readonly afterEventId: number
@@ -86,14 +86,15 @@ export const createMockAgentTransport = (options: {
   const delayMs = options.delayMs ?? 0
 
   return {
-    async *stream(_request, { afterEventId = 0, signal }) {
-      for (const event of quietDormitoryCoffeeScenario) {
+    async *stream(request, { afterEventId = 0, signal }) {
+      for (const event of createQuietDormitoryCoffeeScenario(request.operationScope)) {
         if (event.id <= afterEventId) continue
         if (!(await waitForDelay(delayMs, signal))) return
         if (signal.aborted) return
         const parsed = parseFramedEvent(event)
         if (signal.aborted) return
         yield parsed
+        if (signal.aborted) return
         if (event.id === options.failAfterEventId) throw new MockStreamDisconnectedError(event.id)
       }
     },

@@ -12,6 +12,7 @@ export type AgentStage =
 
 export interface AgentRequest {
   message: string
+  operationScope: string
 }
 
 export interface Recommendation {

@@ -60,11 +60,51 @@ describe('agent event protocol', () => {
     { id: 1, type: 'trail.updated', stage: 'UNKNOWN', label: 'Nope', status: 'running' },
     { id: 1, type: 'recommendations.ready', groups: [{}] },
     { id: 1, type: 'confirmation.requested', confirmation: { ...confirmation, quantity: 0 } },
+    {
+      id: 1,
+      type: 'confirmation.requested',
+      confirmation: { ...confirmation, quantity: 1.5, totalPrice: 298.5 },
+    },
+    {
+      id: 1,
+      type: 'confirmation.requested',
+      confirmation: { ...confirmation, quantity: 100, totalPrice: 19_900 },
+    },
+    {
+      id: 1,
+      type: 'confirmation.requested',
+      confirmation: { ...confirmation, unitPrice: 19.999, totalPrice: 39.998 },
+    },
+    {
+      id: 1,
+      type: 'confirmation.requested',
+      confirmation: { ...confirmation, unitPrice: -0, totalPrice: 0 },
+    },
+    {
+      id: 1,
+      type: 'confirmation.requested',
+      confirmation: { ...confirmation, totalPrice: 397.99 },
+    },
     { id: 1, type: 'operation.completed', confirmationId: 'confirmation-1', cartItemCount: -1 },
     { id: 1, type: 'unknown.event' },
     null,
   ])('returns a non-recoverable API error for malformed payloads', (payload) => {
     expect(parseAgentEvent(payload)).toMatchObject({ code: 'API_ERROR', recoverable: false })
+  })
+
+  it('accepts canonical cent values whose total matches quantity at cent precision', () => {
+    const event = {
+      id: 1,
+      type: 'confirmation.requested',
+      confirmation: {
+        ...confirmation,
+        quantity: 3,
+        unitPrice: 0.29,
+        totalPrice: 0.87,
+      },
+    }
+
+    expect(parseAgentEvent(event)).toEqual(event)
   })
 
   it('accepts strictly sequential event IDs', () => {
@@ -104,7 +144,38 @@ describe('agent event protocol', () => {
   it('marks the stream complete', () => {
     const result = reduceAgentEvent(initialAgentProtocolState, { id: 1, type: 'stream.completed' })
 
-    expect(result.state).toMatchObject({ lastEventId: 1, isCompleted: true, stage: 'COMPLETE' })
+    expect(result.state).toMatchObject({
+      lastEventId: 1,
+      isStreamCompleted: true,
+      isCompleted: true,
+      stage: 'COMPLETE',
+    })
+  })
+
+  it('ends the transport while preserving a pending confirmation as an incomplete workflow', () => {
+    const requested = reduceAgentEvent(initialAgentProtocolState, {
+      id: 1,
+      type: 'confirmation.requested',
+      confirmation,
+    })
+    const completed = reduceAgentEvent(requested.state, { id: 2, type: 'stream.completed' })
+
+    expect(completed.state).toMatchObject({
+      lastEventId: 2,
+      isStreamCompleted: true,
+      isCompleted: false,
+      stage: 'WAIT_CONFIRMATION',
+      pendingConfirmation: confirmation,
+    })
+
+    const postTerminal = reduceAgentEvent(completed.state, {
+      id: 3,
+      type: 'stream.failed',
+      code: 'NETWORK_ERROR',
+      recoverable: true,
+      message: 'Too late to fail',
+    })
+    expect(postTerminal).toEqual({ state: completed.state, effects: [] })
   })
 
   it('replaces a pending confirmation and declares the previous snapshot stale', () => {

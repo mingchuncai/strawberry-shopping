@@ -6,6 +6,7 @@ import { parseAgentEvent } from '@/features/agent/protocol'
 
 const request = {
   message: '预算500元，宿舍用，不要胶囊机，想要安静一些的咖啡器具。',
+  operationScope: 'conversation-one',
 }
 
 const collect = async <T>(stream: AsyncIterable<T>): Promise<T[]> => {
@@ -103,5 +104,53 @@ describe('mock agent SSE transport', () => {
 
     const resumed = await collect(transport.stream(request, { afterEventId: 5, signal: new AbortController().signal }))
     expect(resumed.map((event) => event.id)).toEqual([...Array(resumed.length)].map((_, index) => index + 6))
+  })
+
+  it('derives stable operation identity from the request conversation scope', async () => {
+    const first = await collect(createMockAgentTransport().stream(request, {
+      signal: new AbortController().signal,
+    }))
+    const resumed = await collect(createMockAgentTransport().stream(request, {
+      afterEventId: 10,
+      signal: new AbortController().signal,
+    }))
+    const independent = await collect(createMockAgentTransport().stream({
+      ...request,
+      operationScope: 'conversation-two',
+    }, { signal: new AbortController().signal }))
+    const firstConfirmation = first.find((event) => event.type === 'confirmation.requested')
+    const resumedConfirmation = resumed.find((event) => event.type === 'confirmation.requested')
+    const independentConfirmation = independent.find((event) => event.type === 'confirmation.requested')
+
+    expect(firstConfirmation).toMatchObject({
+      type: 'confirmation.requested',
+      confirmation: {
+        id: expect.any(String),
+        idempotencyKey: expect.any(String),
+      },
+    })
+    expect(resumedConfirmation).toEqual(firstConfirmation)
+    if (
+      firstConfirmation?.type !== 'confirmation.requested' ||
+      independentConfirmation?.type !== 'confirmation.requested'
+    ) {
+      throw new Error('expected confirmation events')
+    }
+    expect(independentConfirmation.confirmation.id).not.toBe(firstConfirmation.confirmation.id)
+    expect(independentConfirmation.confirmation.idempotencyKey).not.toBe(
+      firstConfirmation.confirmation.idempotencyKey,
+    )
+  })
+
+  it('honors abort immediately before a configured disconnect would throw', async () => {
+    const controller = new AbortController()
+    const iterator = createMockAgentTransport({ failAfterEventId: 1 }).stream(request, {
+      signal: controller.signal,
+    })[Symbol.asyncIterator]()
+
+    await expect(iterator.next()).resolves.toMatchObject({ done: false, value: { id: 1 } })
+    controller.abort()
+
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
   })
 })

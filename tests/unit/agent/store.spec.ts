@@ -6,7 +6,8 @@ import { createApp, toRaw } from 'vue'
 vi.mock('element-plus', () => ({ ElMessage: vi.fn() }))
 vi.mock('element-plus/es/components/message/style/css', () => ({}))
 
-import { createAgentStore } from '@/features/agent/store'
+import { createMockAgentTransport } from '@/features/agent/api'
+import { createAgentStore, useAgentStore } from '@/features/agent/store'
 import { initialAgentProtocolState } from '@/features/agent/protocol'
 import type { AgentEvent, AgentTransport, OperationConfirmation } from '@/features/agent/types'
 import { useCartStore } from '@/stores/cart'
@@ -59,6 +60,48 @@ describe('agent conversation store', () => {
     expect(stream).not.toHaveBeenCalled()
     expect(store.canSend).toBe(true)
     expect(store.isStreaming).toBe(false)
+  })
+
+  it('runs two independent default conversations through pending confirmation to cart completion', async () => {
+    const store = useAgentStore()
+    const cart = useCartStore()
+
+    await expect(store.sendMessage('Find quiet coffee gear')).resolves.toBe(false)
+    const first = store.pendingConfirmation
+    expect(first).toMatchObject({
+      id: expect.any(String),
+      idempotencyKey: expect.any(String),
+    })
+    expect(store.protocolState).toMatchObject({
+      stage: 'WAIT_CONFIRMATION',
+      isStreamCompleted: true,
+      isCompleted: false,
+      error: null,
+    })
+    expect(store.canRetry).toBe(false)
+    if (!first) throw new Error('expected first confirmation')
+
+    await expect(store.confirmOperation(first.id)).resolves.toBe(true)
+    expect(store.protocolState).toMatchObject({
+      stage: 'COMPLETE',
+      isCompleted: true,
+      pendingConfirmation: null,
+    })
+
+    await expect(store.sendMessage('Find another quiet coffee kit')).resolves.toBe(false)
+    const second = store.pendingConfirmation
+    expect(second).toMatchObject({
+      id: expect.any(String),
+      idempotencyKey: expect.any(String),
+    })
+    if (!second) throw new Error('expected second confirmation')
+    expect(second.id).not.toBe(first.id)
+    expect(second.idempotencyKey).not.toBe(first.idempotencyKey)
+
+    await expect(store.confirmOperation(second.id)).resolves.toBe(true)
+    expect(cart.cartList).toEqual([
+      expect.objectContaining({ skuId: second.skuId, count: 2 }),
+    ])
   })
 
   it('allows only one stream and progressively reduces message deltas', async () => {
@@ -127,6 +170,74 @@ describe('agent conversation store', () => {
     expect(store.messages['message-1']?.content).toBe('Part one and two')
     expect(store.lastEventId).toBe(4)
     expect(store.canRetry).toBe(false)
+  })
+
+  it('persists one operation scope across a real mock disconnect and resume', async () => {
+    const useResumableAgentStore = createAgentStore(
+      () => createMockAgentTransport({ failAfterEventId: 11 }),
+      'agent-resumable-integration',
+    )
+    const store = useResumableAgentStore()
+
+    await expect(store.sendMessage('Resume the default scenario')).resolves.toBe(false)
+    const beforeRetry = store.pendingConfirmation
+    expect(store.error).toMatchObject({ code: 'NETWORK_ERROR', recoverable: true })
+    expect(store.lastRequest).toMatchObject({
+      message: 'Resume the default scenario',
+      operationScope: expect.any(String),
+    })
+    if (!beforeRetry) throw new Error('expected confirmation before retry')
+
+    await expect(store.retry()).resolves.toBe(false)
+
+    expect(store.pendingConfirmation).toEqual(beforeRetry)
+    expect(store.confirmationSnapshots[beforeRetry.id]).toEqual(beforeRetry)
+    expect(store.protocolState).toMatchObject({
+      stage: 'WAIT_CONFIRMATION',
+      isStreamCompleted: true,
+      isCompleted: false,
+      error: null,
+    })
+    expect(store.canRetry).toBe(false)
+  })
+
+  it('treats a configured disconnect after the terminal mock event as terminal', async () => {
+    const useFinalEventAgentStore = createAgentStore(
+      () => createMockAgentTransport({ failAfterEventId: 13 }),
+      'agent-final-event-integration',
+    )
+    const store = useFinalEventAgentStore()
+
+    await expect(store.sendMessage('Finish at the final event')).resolves.toBe(false)
+
+    expect(store.protocolState).toMatchObject({
+      stage: 'WAIT_CONFIRMATION',
+      isStreamCompleted: true,
+      isCompleted: false,
+      error: null,
+    })
+    expect(store.pendingConfirmation).not.toBeNull()
+    expect(store.canRetry).toBe(false)
+    await expect(store.retry()).resolves.toBe(false)
+  })
+
+  it('turns iterator EOF before stream.completed into a recoverable disconnect', async () => {
+    transport = transportFrom(async function* () {
+      yield { id: 1, type: 'message.started', messageId: 'message-1', role: 'assistant' }
+      yield { id: 2, type: 'message.delta', messageId: 'message-1', delta: 'Partial' }
+    })
+    const store = useTestAgentStore()
+
+    await expect(store.sendMessage('Disconnect at EOF')).resolves.toBe(false)
+
+    expect(store.lastEventId).toBe(2)
+    expect(store.stage).toBe('FAILED')
+    expect(store.error).toMatchObject({
+      code: 'NETWORK_ERROR',
+      recoverable: true,
+      message: expect.stringMatching(/ended|disconnect/i),
+    })
+    expect(store.canRetry).toBe(true)
   })
 
   it('aborts runtime work outside persisted state and transitions to CANCELLED', async () => {
@@ -343,6 +454,163 @@ describe('agent conversation store', () => {
     expect(store.attemptedIdempotencyKeys).toEqual(['attempt-1'])
   })
 
+  it('reconstructs an interrupted persisted stream as recoverable without a runtime controller', () => {
+    localStorage.setItem('agent-test', JSON.stringify({
+      protocolState: {
+        ...initialAgentProtocolState,
+        lastEventId: 2,
+        messages: {
+          'message-1': {
+            id: 'message-1',
+            role: 'assistant',
+            content: 'Partial response',
+            completed: false,
+          },
+        },
+        stage: 'UNDERSTAND',
+        isStreamCompleted: false,
+      },
+      lastRequest: {
+        message: 'Persisted request',
+        operationScope: 'persisted-conversation',
+      },
+      confirmationSnapshots: {},
+      staleConfirmationIds: [],
+      rejectedConfirmationIds: [],
+      attemptedIdempotencyKeys: [],
+    }))
+    const hydratedPinia = createPinia()
+    hydratedPinia.use(piniaPluginPersistedstate)
+    createApp({}).use(hydratedPinia)
+    setActivePinia(hydratedPinia)
+
+    const store = useTestAgentStore()
+
+    expect(store.lastRequest).toEqual({
+      message: 'Persisted request',
+      operationScope: 'persisted-conversation',
+    })
+    expect(store.lastEventId).toBe(2)
+    expect(store.stage).toBe('FAILED')
+    expect(store.error).toMatchObject({ code: 'NETWORK_ERROR', recoverable: true })
+    expect(store.canRetry).toBe(true)
+  })
+
+  it.each([
+    {
+      ledger: 'completed',
+      completedConfirmationIds: ['confirmation-1'],
+      rejectedConfirmationIds: [],
+      staleConfirmationIds: [],
+      attemptedIdempotencyKeys: ['operation-1'],
+      expectedStage: 'COMPLETE',
+      expectedCompleted: true,
+      expectedRecoverable: undefined,
+    },
+    {
+      ledger: 'rejected',
+      completedConfirmationIds: [],
+      rejectedConfirmationIds: ['confirmation-1'],
+      staleConfirmationIds: [],
+      attemptedIdempotencyKeys: [],
+      expectedStage: 'COMPLETE',
+      expectedCompleted: true,
+      expectedRecoverable: undefined,
+    },
+    {
+      ledger: 'stale',
+      completedConfirmationIds: [],
+      rejectedConfirmationIds: [],
+      staleConfirmationIds: ['confirmation-1'],
+      attemptedIdempotencyKeys: [],
+      expectedStage: 'FAILED',
+      expectedCompleted: false,
+      expectedRecoverable: false,
+    },
+  ])('reconciles a hydrated pending confirmation with the $ledger ledger', ({
+    completedConfirmationIds,
+    rejectedConfirmationIds,
+    staleConfirmationIds,
+    attemptedIdempotencyKeys,
+    expectedStage,
+    expectedCompleted,
+    expectedRecoverable,
+  }) => {
+    const snapshot = confirmation()
+    localStorage.setItem('agent-test', JSON.stringify({
+      protocolState: {
+        ...initialAgentProtocolState,
+        lastEventId: 13,
+        pendingConfirmation: snapshot,
+        completedConfirmationIds,
+        stage: 'WAIT_CONFIRMATION',
+        isStreamCompleted: true,
+        isCompleted: false,
+      },
+      lastRequest: {
+        message: 'Persisted operation',
+        operationScope: 'persisted-operation',
+      },
+      confirmationSnapshots: { 'confirmation-1': snapshot },
+      staleConfirmationIds,
+      rejectedConfirmationIds,
+      attemptedIdempotencyKeys,
+    }))
+    const hydratedPinia = createPinia()
+    hydratedPinia.use(piniaPluginPersistedstate)
+    createApp({}).use(hydratedPinia)
+    setActivePinia(hydratedPinia)
+
+    const store = useTestAgentStore()
+
+    expect(store.pendingConfirmation).toBeNull()
+    expect(store.stage).toBe(expectedStage)
+    expect(store.protocolState.isCompleted).toBe(expectedCompleted)
+    if (expectedRecoverable === undefined) expect(store.error).toBeNull()
+    else expect(store.error).toMatchObject({ recoverable: expectedRecoverable })
+  })
+
+  it('hydrates an interrupted cart write into an explicit non-retryable ambiguous state', async () => {
+    const snapshot = confirmation()
+    localStorage.setItem('agent-test', JSON.stringify({
+      protocolState: {
+        ...initialAgentProtocolState,
+        lastEventId: 13,
+        pendingConfirmation: snapshot,
+        stage: 'WAIT_CONFIRMATION',
+        isStreamCompleted: true,
+        isCompleted: false,
+      },
+      lastRequest: {
+        message: 'Persisted operation',
+        operationScope: 'persisted-operation',
+      },
+      confirmationSnapshots: { 'confirmation-1': snapshot },
+      staleConfirmationIds: [],
+      rejectedConfirmationIds: [],
+      attemptedIdempotencyKeys: ['operation-1'],
+    }))
+    const hydratedPinia = createPinia()
+    hydratedPinia.use(piniaPluginPersistedstate)
+    createApp({}).use(hydratedPinia)
+    setActivePinia(hydratedPinia)
+    const store = useTestAgentStore()
+    const cart = useCartStore()
+    const add = vi.spyOn(cart, 'addcart')
+
+    expect(store.pendingConfirmation).toBeNull()
+    expect(store.stage).toBe('FAILED')
+    expect(store.error).toMatchObject({
+      recoverable: false,
+      message: expect.stringMatching(/cart|outcome|unknown|ambiguous/i),
+    })
+    expect(store.canRetry).toBe(false)
+    expect(store.canSend).toBe(false)
+    await expect(store.sendMessage('Do not duplicate the ambiguous write')).resolves.toBe(false)
+    await expect(store.confirmOperation('confirmation-1')).resolves.toBe(false)
+    expect(add).not.toHaveBeenCalled()
+  })
+
   it('drops a hydrated pending confirmation that differs from its frozen snapshot', async () => {
     const snapshot = confirmation()
     const mismatchedPending = confirmation({ quantity: 3, totalPrice: 597 })
@@ -369,6 +637,8 @@ describe('agent conversation store', () => {
     expect(Object.isFrozen(toRaw(store.confirmationSnapshots['confirmation-1']))).toBe(true)
     expect(store.pendingConfirmation).toBeNull()
     expect(store.staleConfirmationIds).toContain('confirmation-1')
+    expect(store.stage).toBe('FAILED')
+    expect(store.error).toMatchObject({ recoverable: false })
     await expect(store.confirmOperation('confirmation-1')).resolves.toBe(false)
     expect(add).not.toHaveBeenCalled()
   })
@@ -405,6 +675,52 @@ describe('agent conversation store', () => {
     expect(store.pendingConfirmation).toBeNull()
   })
 
+  it('rejects confirmation when the displayed operation no longer matches its snapshot', async () => {
+    transport = transportFrom(async function* () {
+      yield { id: 1, type: 'confirmation.requested', confirmation: confirmation() }
+      yield { id: 2, type: 'stream.completed' }
+    })
+    const store = useTestAgentStore()
+    const cart = useCartStore()
+    const add = vi.spyOn(cart, 'addcart')
+    await store.sendMessage('Prepare an operation')
+
+    store.protocolState = {
+      ...store.protocolState,
+      pendingConfirmation: confirmation({ quantity: 3, totalPrice: 597 }),
+    }
+
+    await expect(store.confirmOperation('confirmation-1')).resolves.toBe(false)
+    expect(add).not.toHaveBeenCalled()
+  })
+
+  it('rejects an add-to-cart operation that would exceed the cart quantity limit', async () => {
+    transport = transportFrom(async function* () {
+      yield { id: 1, type: 'confirmation.requested', confirmation: confirmation() }
+      yield { id: 2, type: 'stream.completed' }
+    })
+    const store = useTestAgentStore()
+    const cart = useCartStore()
+    cart.cartList.push({
+      id: 'product-1',
+      skuId: 'sku-1',
+      name: 'Quiet Coffee Grinder',
+      picture: '/coffee.png',
+      price: 199,
+      count: 98,
+      selected: true,
+      attrsText: 'Black',
+    })
+    const add = vi.spyOn(cart, 'addcart')
+    await store.sendMessage('Prepare an operation')
+
+    await expect(store.confirmOperation('confirmation-1')).resolves.toBe(false)
+
+    expect(add).not.toHaveBeenCalled()
+    expect(cart.cartList[0]?.count).toBe(98)
+    expect(store.pendingConfirmation?.id).toBe('confirmation-1')
+  })
+
   it('does not share an in-flight write after a same-ID confirmation becomes stale', async () => {
     const replace = deferred<void>()
     transport = transportFrom(async function* () {
@@ -432,7 +748,10 @@ describe('agent conversation store', () => {
     await expect(Promise.all([first, stale])).resolves.toEqual([true, false])
     await stream
     expect(add).toHaveBeenCalledTimes(1)
-    expect(store.pendingConfirmation).toMatchObject({ payloadHash: 'payload-replaced' })
+    expect(store.pendingConfirmation).toBeNull()
+    expect(store.completedConfirmationIds).toContain('confirmation-1')
+    expect(store.stage).toBe('FAILED')
+    expect(store.error).toMatchObject({ recoverable: false })
   })
 
   it('blocks a distinct confirmation while any cart write is in flight', async () => {
@@ -491,6 +810,16 @@ describe('agent conversation store', () => {
     expect(add).toHaveBeenCalledTimes(1)
     expect(cart.cartList).toHaveLength(1)
     expect(store.attemptedIdempotencyKeys).toContain('operation-1')
+    expect(store.pendingConfirmation).toBeNull()
+    expect(store.stage).toBe('FAILED')
+    expect(store.error).toMatchObject({
+      recoverable: false,
+      message: expect.stringMatching(/cart|outcome|unknown/i),
+    })
+    expect(store.canSend).toBe(false)
+    await expect(store.sendMessage('Do not duplicate the ambiguous write')).resolves.toBe(false)
+    store.resetConversation()
+    expect(store.canSend).toBe(true)
   })
 
   it('does not clear or leak an in-flight confirmation write across reset', async () => {
@@ -520,7 +849,7 @@ describe('agent conversation store', () => {
     expect(store.canSend).toBe(true)
   })
 
-  it('retains the idempotency key and cart completion across a stream retry', async () => {
+  it('keeps a confirmed workflow complete when its still-open transport later disconnects', async () => {
     const disconnect = deferred<void>()
     let attempt = 0
     transport = transportFrom(async function* (_request, { afterEventId }) {
@@ -541,9 +870,15 @@ describe('agent conversation store', () => {
 
     await expect(store.confirmOperation('confirmation-1')).resolves.toBe(true)
     expect(store.confirmationSnapshots['confirmation-1']?.idempotencyKey).toBe('operation-1')
+    expect(store.cancel()).toBe(false)
+    expect(store.stage).toBe('COMPLETE')
     disconnect.resolve()
-    await expect(active).resolves.toBe(false)
-    await expect(store.retry()).resolves.toBe(true)
+    await expect(active).resolves.toBe(true)
+    expect(store.protocolState.isCompleted).toBe(true)
+    expect(store.stage).toBe('COMPLETE')
+    expect(store.error).toBeNull()
+    expect(store.canRetry).toBe(false)
+    await expect(store.retry()).resolves.toBe(false)
     await expect(store.confirmOperation('confirmation-1')).resolves.toBe(false)
 
     expect(add).toHaveBeenCalledTimes(1)

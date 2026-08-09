@@ -30,6 +30,7 @@ export interface AgentProtocolState {
   completedConfirmationIds: string[]
   cartItemCount: number | null
   stage: AgentStage | null
+  isStreamCompleted: boolean
   isCompleted: boolean
   error: AppError | null
 }
@@ -52,6 +53,7 @@ export const initialAgentProtocolState: AgentProtocolState = {
   completedConfirmationIds: [],
   cartItemCount: null,
   stage: null,
+  isStreamCompleted: false,
   isCompleted: false,
   error: null,
 }
@@ -104,6 +106,12 @@ const isPositiveInteger = (value: unknown): value is number =>
 
 const isNonNegativeNumber = (value: unknown): value is number =>
   typeof value === 'number' && Number.isFinite(value) && value >= 0
+
+const toCurrencyCents = (value: unknown): number | null => {
+  if (!isNonNegativeNumber(value) || Object.is(value, -0)) return null
+  const cents = Math.round(value * 100)
+  return Number.isSafeInteger(cents) && cents / 100 === value ? cents : null
+}
 
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every(isNonEmptyString)
@@ -171,6 +179,8 @@ const toConfirmation = (value: unknown): OperationConfirmation | null => {
     payloadHash,
     idempotencyKey,
   } = value
+  const unitPriceCents = toCurrencyCents(unitPrice)
+  const totalPriceCents = toCurrencyCents(totalPrice)
   if (
     !isNonEmptyString(id) ||
     operation !== 'add_to_cart' ||
@@ -179,8 +189,11 @@ const toConfirmation = (value: unknown): OperationConfirmation | null => {
     !isNonEmptyString(productName) ||
     !isNonEmptyString(attrsText) ||
     !isPositiveInteger(quantity) ||
-    !isNonNegativeNumber(unitPrice) ||
-    !isNonNegativeNumber(totalPrice) ||
+    quantity > 99 ||
+    unitPriceCents === null ||
+    totalPriceCents === null ||
+    !Number.isSafeInteger(unitPriceCents * quantity) ||
+    totalPriceCents !== unitPriceCents * quantity ||
     !isNonEmptyString(payloadHash) ||
     !isNonEmptyString(idempotencyKey)
   ) {
@@ -195,8 +208,8 @@ const toConfirmation = (value: unknown): OperationConfirmation | null => {
     productName,
     attrsText,
     quantity,
-    unitPrice,
-    totalPrice,
+    unitPrice: unitPriceCents / 100,
+    totalPrice: totalPriceCents / 100,
     payloadHash,
     idempotencyKey,
   }
@@ -298,6 +311,7 @@ export const reduceAgentEvent = (
   state: AgentProtocolState,
   event: AgentEvent,
 ): AgentProtocolReduction => {
+  if (state.isStreamCompleted || state.isCompleted) return { state, effects: [] }
   if (event.id <= state.lastEventId) return { state, effects: [] }
   if (event.id !== state.lastEventId + 1) {
     return {
@@ -394,6 +408,24 @@ export const reduceAgentEvent = (
         effects: [],
       }
     case 'stream.completed':
-      return { state: { ...nextState, stage: 'COMPLETE', isCompleted: true }, effects: [] }
+      return state.pendingConfirmation
+        ? {
+            state: {
+              ...nextState,
+              stage: 'WAIT_CONFIRMATION',
+              isStreamCompleted: true,
+              isCompleted: false,
+            },
+            effects: [],
+          }
+        : {
+            state: {
+              ...nextState,
+              stage: 'COMPLETE',
+              isStreamCompleted: true,
+              isCompleted: true,
+            },
+            effects: [],
+          }
   }
 }

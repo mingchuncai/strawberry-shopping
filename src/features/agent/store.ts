@@ -15,7 +15,12 @@ import {
   type AgentProtocolState,
   type AgentTrailItem,
 } from './protocol'
-import type { AgentStage, AgentTransport, OperationConfirmation } from './types'
+import type {
+  AgentRequest,
+  AgentStage,
+  AgentTransport,
+  OperationConfirmation,
+} from './types'
 
 export type AgentTransportFactory = () => AgentTransport
 
@@ -90,6 +95,33 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0
+
+let operationScopeSequence = 0
+
+const createOperationScope = (): string => {
+  operationScopeSequence += 1
+  const randomPart = typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+  return `${randomPart}-${operationScopeSequence.toString(36)}`
+}
+
+const normalizeAgentRequest = (value: unknown): AgentRequest | null => {
+  if (isNonEmptyString(value)) {
+    const message = value.trim()
+    return message ? { message, operationScope: createOperationScope() } : null
+  }
+  if (
+    !isRecord(value) ||
+    !isNonEmptyString(value.message) ||
+    !isNonEmptyString(value.operationScope)
+  ) {
+    return null
+  }
+  const message = value.message.trim()
+  const operationScope = value.operationScope.trim()
+  return message && operationScope ? { message, operationScope } : null
+}
 
 const normalizeIds = (value: unknown): string[] => {
   if (!Array.isArray(value)) return []
@@ -192,6 +224,12 @@ const transportError = (error: unknown): AppError => {
   }
 }
 
+const ambiguousCartWriteError = (): AppError => ({
+  code: 'API_ERROR',
+  message: 'The cart update outcome is unknown. Review the cart before starting another operation.',
+  recoverable: false,
+})
+
 const cartItemFrom = (value: OperationConfirmation): CartItem => ({
   id: value.productId,
   skuId: value.skuId,
@@ -220,6 +258,14 @@ interface InFlightConfirmationWrite {
 }
 
 const restoreConfirmationState = (store: PersistedAgentConfirmationState) => {
+  const lastRequest = normalizeAgentRequest(store.lastRequest)
+  const completedIds = normalizeIds(
+    isRecord(store.protocolState) ? store.protocolState.completedConfirmationIds : [],
+  )
+  let staleIds = normalizeIds(store.staleConfirmationIds)
+  const rejectedIds = normalizeIds(store.rejectedConfirmationIds)
+  const attemptedKeys = normalizeIds(store.attemptedIdempotencyKeys)
+
   const snapshots: Record<string, OperationConfirmation> = {}
   const snapshotValues = isRecord(store.confirmationSnapshots)
     ? Object.values(store.confirmationSnapshots)
@@ -229,16 +275,94 @@ const restoreConfirmationState = (store: PersistedAgentConfirmationState) => {
     if (snapshot) snapshots[snapshot.id] = snapshot
   }
   store.confirmationSnapshots = snapshots
+  store.lastRequest = lastRequest
+  store.rejectedConfirmationIds = rejectedIds
+  store.attemptedIdempotencyKeys = attemptedKeys
 
   const raw = isRecord(store.protocolState) ? store.protocolState : {}
   const parsedPending = parseImmutableConfirmation(raw.pendingConfirmation)
   const snapshot = parsedPending ? snapshots[parsedPending.id] : null
-  const pending = parsedPending && snapshot && confirmationsMatch(parsedPending, snapshot)
+  let pending = parsedPending && snapshot && confirmationsMatch(parsedPending, snapshot)
     ? snapshot
     : null
-  const rawStage = typeof raw.stage === 'string' && agentStages.has(raw.stage as AgentStage)
+  let stage = typeof raw.stage === 'string' && agentStages.has(raw.stage as AgentStage)
     ? raw.stage as AgentStage
     : null
+  let isStreamCompleted = typeof raw.isStreamCompleted === 'boolean'
+    ? raw.isStreamCompleted
+    : raw.isCompleted === true
+  let isCompleted = typeof raw.isCompleted === 'boolean' ? raw.isCompleted : false
+  let error = normalizeError(raw.error)
+
+  const invalidPending = Boolean(parsedPending && !pending)
+  if (invalidPending && parsedPending) {
+    staleIds = appendUnique(staleIds, parsedPending.id)
+  }
+
+  const ambiguousSnapshot = Object.values(snapshots).find((candidate) =>
+    attemptedKeys.includes(candidate.idempotencyKey) &&
+    !completedIds.includes(candidate.id),
+  )
+
+  if (pending && completedIds.includes(pending.id)) {
+    pending = null
+    stage = 'COMPLETE'
+    isCompleted = true
+    error = null
+  } else if (pending && attemptedKeys.includes(pending.idempotencyKey)) {
+    staleIds = appendUnique(staleIds, pending.id)
+    pending = null
+    stage = 'FAILED'
+    isCompleted = false
+    error = ambiguousCartWriteError()
+  } else if (pending && rejectedIds.includes(pending.id)) {
+    pending = null
+    stage = 'COMPLETE'
+    isCompleted = true
+    error = null
+  } else if (pending && staleIds.includes(pending.id)) {
+    pending = null
+    stage = 'FAILED'
+    isCompleted = false
+    error = {
+      code: 'API_ERROR',
+      message: 'The persisted confirmation is stale and cannot be executed safely.',
+      recoverable: false,
+    }
+  } else if (invalidPending) {
+    pending = null
+    stage = 'FAILED'
+    isCompleted = false
+    error = {
+      code: 'API_ERROR',
+      message: 'The persisted confirmation no longer matches its immutable snapshot.',
+      recoverable: false,
+    }
+  } else if (!pending && ambiguousSnapshot) {
+    staleIds = appendUnique(staleIds, ambiguousSnapshot.id)
+    stage = 'FAILED'
+    isCompleted = false
+    error = ambiguousCartWriteError()
+  } else if (pending && (isStreamCompleted || isCompleted)) {
+    isStreamCompleted = true
+    isCompleted = false
+    stage = 'WAIT_CONFIRMATION'
+    error = null
+  } else if (!pending && (isStreamCompleted || isCompleted)) {
+    stage = 'COMPLETE'
+    isCompleted = true
+    error = null
+  } else if (lastRequest && stage !== 'CANCELLED') {
+    stage = 'FAILED'
+    error ??= {
+      code: 'NETWORK_ERROR',
+      message: 'The agent stream was interrupted before completion.',
+      recoverable: true,
+    }
+  } else if (stage === 'WAIT_CONFIRMATION' && !pending) {
+    stage = null
+  }
+
   store.protocolState = {
     lastEventId: typeof raw.lastEventId === 'number' &&
       Number.isSafeInteger(raw.lastEventId) && raw.lastEventId >= 0
@@ -248,23 +372,18 @@ const restoreConfirmationState = (store: PersistedAgentConfirmationState) => {
     trail: normalizeTrail(raw.trail),
     recommendationGroups: normalizeRecommendationGroups(raw.recommendationGroups),
     pendingConfirmation: pending,
-    completedConfirmationIds: normalizeIds(raw.completedConfirmationIds),
+    completedConfirmationIds: completedIds,
     cartItemCount: typeof raw.cartItemCount === 'number' &&
       Number.isSafeInteger(raw.cartItemCount) && raw.cartItemCount >= 0
       ? raw.cartItemCount
       : null,
-    stage: rawStage === 'WAIT_CONFIRMATION' && !pending ? null : rawStage,
-    isCompleted: typeof raw.isCompleted === 'boolean' ? raw.isCompleted : false,
-    error: normalizeError(raw.error),
+    stage,
+    isStreamCompleted,
+    isCompleted,
+    error,
   } satisfies AgentProtocolState
 
-  const staleIds = normalizeIds(store.staleConfirmationIds)
-  store.staleConfirmationIds = parsedPending && !pending
-    ? appendUnique(staleIds, parsedPending.id)
-    : staleIds
-  store.rejectedConfirmationIds = normalizeIds(store.rejectedConfirmationIds)
-  store.attemptedIdempotencyKeys = normalizeIds(store.attemptedIdempotencyKeys)
-  store.lastRequest = isNonEmptyString(store.lastRequest) ? store.lastRequest.trim() || null : null
+  store.staleConfirmationIds = staleIds
 }
 
 export const createAgentStore = (
@@ -274,7 +393,7 @@ export const createAgentStore = (
   storeId,
   () => {
     const protocolState = ref<AgentProtocolState>(freshProtocolState())
-    const lastRequest = ref<string | null>(null)
+    const lastRequest = ref<AgentRequest | null>(null)
     const confirmationSnapshots = ref<Record<string, OperationConfirmation>>({})
     const staleConfirmationIds = ref<string[]>([])
     const rejectedConfirmationIds = ref<string[]>([])
@@ -295,17 +414,27 @@ export const createAgentStore = (
     const stage = computed(() => protocolState.value.stage)
     const error = computed(() => protocolState.value.error)
     const isStreaming = computed(() => streaming.value)
-    const canSend = computed(() => !streaming.value && pendingWriteCount.value === 0)
+    const hasAmbiguousWrite = computed(() => Object.values(confirmationSnapshots.value).some(
+      (snapshot) =>
+        attemptedIdempotencyKeys.value.includes(snapshot.idempotencyKey) &&
+        !protocolState.value.completedConfirmationIds.includes(snapshot.id) &&
+        !rejectedConfirmationIds.value.includes(snapshot.id),
+    ))
+    const canSend = computed(() =>
+      !streaming.value && pendingWriteCount.value === 0 && !hasAmbiguousWrite.value,
+    )
     const canRetry = computed(() => Boolean(
       !streaming.value &&
       lastRequest.value &&
+      !protocolState.value.isStreamCompleted &&
+      !protocolState.value.isCompleted &&
       protocolState.value.error?.recoverable,
     ))
 
     const rememberConfirmation = (value: OperationConfirmation) => {
       const existing = confirmationSnapshots.value[value.id]
       if (existing) {
-        if (existing.payloadHash !== value.payloadHash) {
+        if (!confirmationsMatch(existing, value)) {
           staleConfirmationIds.value = appendUnique(staleConfirmationIds.value, value.id)
         }
         return
@@ -317,7 +446,7 @@ export const createAgentStore = (
     }
 
     const runStream = async (
-      message: string,
+      request: AgentRequest,
       afterEventId?: number,
     ): Promise<boolean> => {
       if (streaming.value) return false
@@ -331,8 +460,8 @@ export const createAgentStore = (
         const options = afterEventId === undefined
           ? { signal: controller.signal }
           : { afterEventId, signal: controller.signal }
-        for await (const event of transportFactory().stream({ message }, options)) {
-          if (controller.signal.aborted) return false
+        for await (const event of transportFactory().stream(request, options)) {
+          if (controller.signal.aborted) return protocolState.value.isCompleted
 
           const previousEventId = protocolState.value.lastEventId
           const reduction = reduceAgentEvent(protocolState.value, event)
@@ -357,9 +486,30 @@ export const createAgentStore = (
             return false
           }
           if (eventAccepted && event.type === 'stream.failed') return false
+          if (eventAccepted && event.type === 'stream.completed') {
+            return reduction.state.isCompleted
+          }
         }
+
+        if (controller.signal.aborted) return protocolState.value.isCompleted
+        if (protocolState.value.isStreamCompleted || protocolState.value.isCompleted) {
+          return protocolState.value.isCompleted
+        }
+        protocolState.value = {
+          ...protocolState.value,
+          stage: 'FAILED',
+          error: {
+            code: 'NETWORK_ERROR',
+            message: 'Agent stream ended before stream.completed.',
+            recoverable: true,
+          },
+        }
+        return false
       } catch (cause) {
-        if (controller.signal.aborted) return false
+        if (controller.signal.aborted) return protocolState.value.isCompleted
+        if (protocolState.value.isStreamCompleted || protocolState.value.isCompleted) {
+          return protocolState.value.isCompleted
+        }
         protocolState.value = {
           ...protocolState.value,
           stage: 'FAILED',
@@ -387,15 +537,29 @@ export const createAgentStore = (
 
     const sendMessage = async (text: string): Promise<boolean> => {
       const message = text.trim()
-      if (!message || streaming.value || pendingWriteCount.value > 0) return false
+      if (
+        !message ||
+        streaming.value ||
+        pendingWriteCount.value > 0 ||
+        hasAmbiguousWrite.value
+      ) {
+        return false
+      }
 
       clearConversationState()
-      lastRequest.value = message
-      return runStream(message)
+      const request = { message, operationScope: createOperationScope() }
+      lastRequest.value = request
+      return runStream(request)
     }
 
     const cancel = (): boolean => {
-      if (!activeController) return false
+      if (
+        !activeController ||
+        protocolState.value.isStreamCompleted ||
+        protocolState.value.isCompleted
+      ) {
+        return false
+      }
       protocolState.value = {
         ...protocolState.value,
         stage: 'CANCELLED',
@@ -421,7 +585,7 @@ export const createAgentStore = (
         staleConfirmationIds.value.includes(id) ||
         rejectedConfirmationIds.value.includes(id) ||
         protocolState.value.completedConfirmationIds.includes(id) ||
-        current.payloadHash !== snapshot.payloadHash
+        !confirmationsMatch(current, snapshot)
       ) {
         return Promise.resolve(false)
       }
@@ -439,6 +603,13 @@ export const createAgentStore = (
         return Promise.resolve(false)
       }
 
+      const cartStore = useCartStore()
+      const existingCount = cartStore.cartList.reduce(
+        (count, item) => item.skuId === snapshot.skuId ? count + item.count : count,
+        0,
+      )
+      if (existingCount + snapshot.quantity > 99) return Promise.resolve(false)
+
       attemptedIdempotencyKeys.value = appendUnique(
         attemptedIdempotencyKeys.value,
         snapshot.idempotencyKey,
@@ -446,23 +617,71 @@ export const createAgentStore = (
       pendingWriteCount.value += 1
       const writeGeneration = conversationGeneration
       const write = (async () => {
-        const cartStore = useCartStore()
-        await cartStore.addcart(cartItemFrom(snapshot))
+        try {
+          await cartStore.addcart(cartItemFrom(snapshot))
+        } catch (cause) {
+          confirmationSnapshots.value = {
+            ...confirmationSnapshots.value,
+            [id]: snapshot,
+          }
+          staleConfirmationIds.value = appendUnique(staleConfirmationIds.value, id)
+          protocolState.value = {
+            ...protocolState.value,
+            stage: 'FAILED',
+            pendingConfirmation: null,
+            isCompleted: false,
+            error: ambiguousCartWriteError(),
+          }
+          activeController?.abort()
+          throw cause
+        }
         if (
           conversationGeneration === writeGeneration &&
-          protocolState.value.pendingConfirmation?.id === id &&
-          protocolState.value.pendingConfirmation.payloadHash === snapshot.payloadHash &&
+          protocolState.value.pendingConfirmation &&
+          confirmationsMatch(protocolState.value.pendingConfirmation, snapshot) &&
           !staleConfirmationIds.value.includes(id)
         ) {
           protocolState.value = {
             ...protocolState.value,
             stage: 'COMPLETE',
             pendingConfirmation: null,
+            isCompleted: true,
             completedConfirmationIds: appendUnique(
               protocolState.value.completedConfirmationIds,
               id,
             ),
             cartItemCount: cartStore.allcount,
+            error: null,
+          }
+          activeController?.abort()
+        } else if (conversationGeneration === writeGeneration) {
+          const current = protocolState.value.pendingConfirmation
+          const completedIds = appendUnique(
+            protocolState.value.completedConfirmationIds,
+            id,
+          )
+          if (current && current.id !== id) {
+            protocolState.value = {
+              ...protocolState.value,
+              completedConfirmationIds: completedIds,
+              cartItemCount: cartStore.allcount,
+            }
+          } else {
+            staleConfirmationIds.value = appendUnique(staleConfirmationIds.value, id)
+            protocolState.value = {
+              ...protocolState.value,
+              stage: 'FAILED',
+              pendingConfirmation: null,
+              isCompleted: false,
+              completedConfirmationIds: completedIds,
+              cartItemCount: cartStore.allcount,
+              error: {
+                code: 'API_ERROR',
+                message: 'The confirmation changed while its cart update was in flight. Review the cart before continuing.',
+                recoverable: false,
+              },
+            }
+            activeController?.abort()
           }
         }
         return true
@@ -491,7 +710,10 @@ export const createAgentStore = (
         ...protocolState.value,
         stage: 'COMPLETE',
         pendingConfirmation: null,
+        isCompleted: true,
+        error: null,
       }
+      activeController?.abort()
       return true
     }
 

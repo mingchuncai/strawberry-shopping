@@ -2,7 +2,7 @@ import type { AgentEvent } from '../types'
 
 const messageId = 'mock-coffee-message-1'
 
-export const quietDormitoryCoffeeScenario: readonly AgentEvent[] = [
+const quietDormitoryCoffeeScenarioTemplate: readonly AgentEvent[] = [
   { id: 1, type: 'message.started', messageId, role: 'assistant' },
   { id: 2, type: 'trail.updated', stage: 'UNDERSTAND', label: '理解使用需求', status: 'running' },
   {
@@ -71,3 +71,21 @@ export const quietDormitoryCoffeeScenario: readonly AgentEvent[] = [
   { id: 12, type: 'message.completed', messageId },
   { id: 13, type: 'stream.completed' },
 ]
+
+export const createQuietDormitoryCoffeeScenario = (
+  operationScope: string,
+): readonly AgentEvent[] => {
+  const encodedScope = encodeURIComponent(operationScope)
+  return quietDormitoryCoffeeScenarioTemplate.map((event) => {
+    if (event.type !== 'confirmation.requested') return event
+    return {
+      ...event,
+      confirmation: {
+        ...event.confirmation,
+        id: `mock-confirmation-coffee-kit-${encodedScope}`,
+        payloadHash: `mock-coffee-payload-${encodedScope}`,
+        idempotencyKey: `mock-coffee-operation-${encodedScope}`,
+      },
+    }
+  })
+}
