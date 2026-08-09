@@ -7,6 +7,7 @@ vi.mock('element-plus', () => ({ ElMessage: vi.fn() }))
 vi.mock('element-plus/es/components/message/style/css', () => ({}))
 
 import { createAgentStore } from '@/features/agent/store'
+import { initialAgentProtocolState } from '@/features/agent/protocol'
 import type { AgentEvent, AgentTransport, OperationConfirmation } from '@/features/agent/types'
 import { useCartStore } from '@/stores/cart'
 
@@ -302,6 +303,76 @@ describe('agent conversation store', () => {
     expect(add).toHaveBeenCalledWith(expect.objectContaining({ count: 2 }))
   })
 
+  it('normalizes every persisted protocol collection, cursor, status and error field', () => {
+    localStorage.setItem('agent-test', JSON.stringify({
+      protocolState: {
+        lastEventId: -9,
+        messages: {
+          broken: { id: 42, role: 'user', content: null, completed: 'yes' },
+        },
+        trail: [{ stage: 'UNKNOWN', label: 7, status: 'done' }],
+        recommendationGroups: [{}],
+        pendingConfirmation: { malformed: true },
+        completedConfirmationIds: ['done-1', 42, 'done-1'],
+        cartItemCount: -2,
+        stage: 'UNKNOWN',
+        isCompleted: 'yes',
+        error: { code: 'BAD_CODE', message: 9, recoverable: 'yes' },
+      },
+      lastRequest: 42,
+      confirmationSnapshots: { malformed: { id: 'broken' } },
+      staleConfirmationIds: ['stale-1', 7, 'stale-1'],
+      rejectedConfirmationIds: 'not-an-array',
+      attemptedIdempotencyKeys: ['attempt-1', null, 'attempt-1'],
+    }))
+    const hydratedPinia = createPinia()
+    hydratedPinia.use(piniaPluginPersistedstate)
+    createApp({}).use(hydratedPinia)
+    setActivePinia(hydratedPinia)
+
+    const store = useTestAgentStore()
+
+    expect(store.protocolState).toEqual({
+      ...initialAgentProtocolState,
+      completedConfirmationIds: ['done-1'],
+    })
+    expect(store.lastRequest).toBeNull()
+    expect(store.confirmationSnapshots).toEqual({})
+    expect(store.staleConfirmationIds).toEqual(['stale-1'])
+    expect(store.rejectedConfirmationIds).toEqual([])
+    expect(store.attemptedIdempotencyKeys).toEqual(['attempt-1'])
+  })
+
+  it('drops a hydrated pending confirmation that differs from its frozen snapshot', async () => {
+    const snapshot = confirmation()
+    const mismatchedPending = confirmation({ quantity: 3, totalPrice: 597 })
+    localStorage.setItem('agent-test', JSON.stringify({
+      protocolState: {
+        ...initialAgentProtocolState,
+        pendingConfirmation: mismatchedPending,
+        stage: 'WAIT_CONFIRMATION',
+      },
+      lastRequest: 'Persisted operation',
+      confirmationSnapshots: { 'confirmation-1': snapshot },
+      staleConfirmationIds: [],
+      rejectedConfirmationIds: [],
+      attemptedIdempotencyKeys: [],
+    }))
+    const hydratedPinia = createPinia()
+    hydratedPinia.use(piniaPluginPersistedstate)
+    createApp({}).use(hydratedPinia)
+    setActivePinia(hydratedPinia)
+    const store = useTestAgentStore()
+    const cart = useCartStore()
+    const add = vi.spyOn(cart, 'addcart').mockResolvedValue(undefined)
+
+    expect(Object.isFrozen(toRaw(store.confirmationSnapshots['confirmation-1']))).toBe(true)
+    expect(store.pendingConfirmation).toBeNull()
+    expect(store.staleConfirmationIds).toContain('confirmation-1')
+    await expect(store.confirmOperation('confirmation-1')).resolves.toBe(false)
+    expect(add).not.toHaveBeenCalled()
+  })
+
   it('mutates the cart exactly once across concurrent and repeated confirmations', async () => {
     transport = transportFrom(async function* () {
       yield { id: 1, type: 'confirmation.requested', confirmation: confirmation() }
@@ -362,6 +433,44 @@ describe('agent conversation store', () => {
     await stream
     expect(add).toHaveBeenCalledTimes(1)
     expect(store.pendingConfirmation).toMatchObject({ payloadHash: 'payload-replaced' })
+  })
+
+  it('blocks a distinct confirmation while any cart write is in flight', async () => {
+    const showSecond = deferred<void>()
+    transport = transportFrom(async function* () {
+      yield { id: 1, type: 'confirmation.requested', confirmation: confirmation() }
+      await showSecond.promise
+      yield {
+        id: 2,
+        type: 'confirmation.requested',
+        confirmation: confirmation({
+          id: 'confirmation-2',
+          skuId: 'sku-2',
+          payloadHash: 'payload-2',
+          idempotencyKey: 'operation-2',
+        }),
+      }
+    })
+    const store = useTestAgentStore()
+    const cart = useCartStore()
+    const firstAdded = deferred<void>()
+    const add = vi.spyOn(cart, 'addcart')
+      .mockImplementationOnce(() => firstAdded.promise)
+      .mockResolvedValueOnce(undefined)
+    const active = store.sendMessage('Prepare operations')
+    await vi.waitFor(() => expect(store.pendingConfirmation?.id).toBe('confirmation-1'))
+    const first = store.confirmOperation('confirmation-1')
+
+    showSecond.resolve()
+    await vi.waitFor(() => expect(store.pendingConfirmation?.id).toBe('confirmation-2'))
+    await active
+    await expect(store.confirmOperation('confirmation-2')).resolves.toBe(false)
+    expect(add).toHaveBeenCalledTimes(1)
+
+    firstAdded.resolve()
+    await expect(first).resolves.toBe(true)
+    await expect(store.confirmOperation('confirmation-2')).resolves.toBe(true)
+    expect(add).toHaveBeenCalledTimes(2)
   })
 
   it('keeps an ambiguous failed cart write from being invoked a second time', async () => {

@@ -11,9 +11,11 @@ import {
   initialAgentProtocolState,
   parseAgentEvent,
   reduceAgentEvent,
+  type AgentMessage,
   type AgentProtocolState,
+  type AgentTrailItem,
 } from './protocol'
-import type { AgentTransport, OperationConfirmation } from './types'
+import type { AgentStage, AgentTransport, OperationConfirmation } from './types'
 
 export type AgentTransportFactory = () => AgentTransport
 
@@ -23,6 +25,26 @@ const appErrorCodes = new Set<AppErrorCode>([
   'TIMEOUT',
   'API_ERROR',
   'UNKNOWN',
+])
+
+const agentStages = new Set<AgentStage>([
+  'UNDERSTAND',
+  'CLARIFY',
+  'PLAN',
+  'EXECUTE_READ',
+  'SYNTHESIZE',
+  'WAIT_CONFIRMATION',
+  'EXECUTE_WRITE',
+  'COMPLETE',
+  'FAILED',
+  'CANCELLED',
+])
+
+const trailStatuses = new Set<AgentTrailItem['status']>([
+  'pending',
+  'running',
+  'completed',
+  'failed',
 ])
 
 const freshProtocolState = (): AgentProtocolState => ({
@@ -42,6 +64,113 @@ const parseImmutableConfirmation = (value: unknown): OperationConfirmation | nul
   return 'type' in parsed && parsed.type === 'confirmation.requested'
     ? immutableConfirmation(parsed.confirmation)
     : null
+}
+
+const confirmationFields: readonly (keyof OperationConfirmation)[] = [
+  'id',
+  'operation',
+  'productId',
+  'skuId',
+  'productName',
+  'attrsText',
+  'quantity',
+  'unitPrice',
+  'totalPrice',
+  'payloadHash',
+  'idempotencyKey',
+]
+
+const confirmationsMatch = (
+  left: OperationConfirmation,
+  right: OperationConfirmation,
+): boolean => confirmationFields.every((field) => left[field] === right[field])
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const isNonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0
+
+const normalizeIds = (value: unknown): string[] => {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter(isNonEmptyString))]
+}
+
+const normalizeMessages = (value: unknown): Record<string, AgentMessage> => {
+  if (!isRecord(value)) return {}
+  const messages: Record<string, AgentMessage> = {}
+  for (const [key, candidate] of Object.entries(value)) {
+    if (
+      key === '__proto__' ||
+      key === 'prototype' ||
+      key === 'constructor' ||
+      !isRecord(candidate) ||
+      candidate.id !== key ||
+      candidate.role !== 'assistant' ||
+      typeof candidate.content !== 'string' ||
+      typeof candidate.completed !== 'boolean'
+    ) {
+      continue
+    }
+    messages[key] = {
+      id: key,
+      role: 'assistant',
+      content: candidate.content,
+      completed: candidate.completed,
+    }
+  }
+  return messages
+}
+
+const normalizeTrail = (value: unknown): AgentTrailItem[] => {
+  if (!Array.isArray(value)) return []
+  const items = new Map<AgentStage, AgentTrailItem>()
+  for (const candidate of value) {
+    if (
+      !isRecord(candidate) ||
+      typeof candidate.stage !== 'string' ||
+      !agentStages.has(candidate.stage as AgentStage) ||
+      !isNonEmptyString(candidate.label) ||
+      typeof candidate.status !== 'string' ||
+      !trailStatuses.has(candidate.status as AgentTrailItem['status'])
+    ) {
+      continue
+    }
+    const stage = candidate.stage as AgentStage
+    items.set(stage, {
+      stage,
+      label: candidate.label,
+      status: candidate.status as AgentTrailItem['status'],
+    })
+  }
+  return [...items.values()]
+}
+
+const normalizeRecommendationGroups = (
+  value: unknown,
+): AgentProtocolState['recommendationGroups'] => {
+  const parsed = parseAgentEvent({ id: 1, type: 'recommendations.ready', groups: value })
+  return 'type' in parsed && parsed.type === 'recommendations.ready' ? parsed.groups : []
+}
+
+const normalizeError = (value: unknown): AppError | null => {
+  if (
+    !isRecord(value) ||
+    typeof value.code !== 'string' ||
+    !appErrorCodes.has(value.code as AppErrorCode) ||
+    !isNonEmptyString(value.message) ||
+    typeof value.recoverable !== 'boolean' ||
+    (value.status !== undefined &&
+      (typeof value.status !== 'number' || !Number.isFinite(value.status)))
+  ) {
+    return null
+  }
+  return {
+    code: value.code as AppErrorCode,
+    message: value.message,
+    recoverable: value.recoverable,
+    ...(typeof value.status === 'number' ? { status: value.status } : {}),
+  }
 }
 
 const appendUnique = (values: string[], value: string): string[] =>
@@ -75,11 +204,12 @@ const cartItemFrom = (value: OperationConfirmation): CartItem => ({
 })
 
 interface PersistedAgentConfirmationState {
-  protocolState: AgentProtocolState
-  confirmationSnapshots: Record<string, OperationConfirmation>
-  staleConfirmationIds: string[]
-  rejectedConfirmationIds: string[]
-  attemptedIdempotencyKeys: string[]
+  protocolState: unknown
+  lastRequest: unknown
+  confirmationSnapshots: unknown
+  staleConfirmationIds: unknown
+  rejectedConfirmationIds: unknown
+  attemptedIdempotencyKeys: unknown
 }
 
 interface InFlightConfirmationWrite {
@@ -91,26 +221,50 @@ interface InFlightConfirmationWrite {
 
 const restoreConfirmationState = (store: PersistedAgentConfirmationState) => {
   const snapshots: Record<string, OperationConfirmation> = {}
-  for (const value of Object.values(store.confirmationSnapshots ?? {})) {
+  const snapshotValues = isRecord(store.confirmationSnapshots)
+    ? Object.values(store.confirmationSnapshots)
+    : []
+  for (const value of snapshotValues) {
     const snapshot = parseImmutableConfirmation(value)
     if (snapshot) snapshots[snapshot.id] = snapshot
   }
   store.confirmationSnapshots = snapshots
 
-  const pending = parseImmutableConfirmation(store.protocolState?.pendingConfirmation)
+  const raw = isRecord(store.protocolState) ? store.protocolState : {}
+  const parsedPending = parseImmutableConfirmation(raw.pendingConfirmation)
+  const snapshot = parsedPending ? snapshots[parsedPending.id] : null
+  const pending = parsedPending && snapshot && confirmationsMatch(parsedPending, snapshot)
+    ? snapshot
+    : null
+  const rawStage = typeof raw.stage === 'string' && agentStages.has(raw.stage as AgentStage)
+    ? raw.stage as AgentStage
+    : null
   store.protocolState = {
-    ...(store.protocolState ?? freshProtocolState()),
+    lastEventId: typeof raw.lastEventId === 'number' &&
+      Number.isSafeInteger(raw.lastEventId) && raw.lastEventId >= 0
+      ? raw.lastEventId
+      : 0,
+    messages: normalizeMessages(raw.messages),
+    trail: normalizeTrail(raw.trail),
+    recommendationGroups: normalizeRecommendationGroups(raw.recommendationGroups),
     pendingConfirmation: pending,
-  }
-  store.staleConfirmationIds = Array.isArray(store.staleConfirmationIds)
-    ? store.staleConfirmationIds.filter((id): id is string => typeof id === 'string')
-    : []
-  store.rejectedConfirmationIds = Array.isArray(store.rejectedConfirmationIds)
-    ? store.rejectedConfirmationIds.filter((id): id is string => typeof id === 'string')
-    : []
-  store.attemptedIdempotencyKeys = Array.isArray(store.attemptedIdempotencyKeys)
-    ? store.attemptedIdempotencyKeys.filter((key): key is string => typeof key === 'string')
-    : []
+    completedConfirmationIds: normalizeIds(raw.completedConfirmationIds),
+    cartItemCount: typeof raw.cartItemCount === 'number' &&
+      Number.isSafeInteger(raw.cartItemCount) && raw.cartItemCount >= 0
+      ? raw.cartItemCount
+      : null,
+    stage: rawStage === 'WAIT_CONFIRMATION' && !pending ? null : rawStage,
+    isCompleted: typeof raw.isCompleted === 'boolean' ? raw.isCompleted : false,
+    error: normalizeError(raw.error),
+  } satisfies AgentProtocolState
+
+  const staleIds = normalizeIds(store.staleConfirmationIds)
+  store.staleConfirmationIds = parsedPending && !pending
+    ? appendUnique(staleIds, parsedPending.id)
+    : staleIds
+  store.rejectedConfirmationIds = normalizeIds(store.rejectedConfirmationIds)
+  store.attemptedIdempotencyKeys = normalizeIds(store.attemptedIdempotencyKeys)
+  store.lastRequest = isNonEmptyString(store.lastRequest) ? store.lastRequest.trim() || null : null
 }
 
 export const createAgentStore = (
@@ -280,6 +434,7 @@ export const createAgentStore = (
           ? existingWrite.promise
           : Promise.resolve(false)
       }
+      if (confirmationWrites.size > 0) return Promise.resolve(false)
       if (attemptedIdempotencyKeys.value.includes(snapshot.idempotencyKey)) {
         return Promise.resolve(false)
       }
