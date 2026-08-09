@@ -104,6 +104,40 @@ describe('agent conversation store', () => {
     ])
   })
 
+  it.each(['confirm', 'reject'] as const)(
+    'completes the WAIT_CONFIRMATION trail when the user chooses to %s',
+    async (decision) => {
+      transport = transportFrom(async function* () {
+        yield {
+          id: 1,
+          type: 'trail.updated',
+          stage: 'WAIT_CONFIRMATION',
+          label: 'Awaiting confirmation',
+          status: 'running',
+        }
+        yield { id: 2, type: 'confirmation.requested', confirmation: confirmation() }
+        yield { id: 3, type: 'stream.completed' }
+      })
+      const store = useTestAgentStore()
+      const cart = useCartStore()
+      const add = vi.spyOn(cart, 'addcart').mockResolvedValue(undefined)
+      await store.sendMessage('Prepare an operation')
+
+      if (decision === 'confirm') {
+        await expect(store.confirmOperation('confirmation-1')).resolves.toBe(true)
+        expect(add).toHaveBeenCalledTimes(1)
+      } else {
+        expect(store.rejectOperation('confirmation-1')).toBe(true)
+        expect(add).not.toHaveBeenCalled()
+      }
+
+      expect(store.stage).toBe('COMPLETE')
+      expect(store.trail.find((item) => item.stage === 'WAIT_CONFIRMATION')).toMatchObject({
+        status: 'completed',
+      })
+    },
+  )
+
   it('allows only one stream and progressively reduces message deltas', async () => {
     const releaseDelta = deferred<void>()
     const releaseCompletion = deferred<void>()
@@ -347,7 +381,13 @@ describe('agent conversation store', () => {
     await store.sendMessage('Prepare an operation')
     first.quantity = 99
 
-    expect(store.pendingConfirmation).toMatchObject({ quantity: 2, payloadHash: 'payload-changed' })
+    expect(store.confirmationSnapshots['confirmation-1']).toMatchObject({
+      quantity: 2,
+      payloadHash: 'payload-1',
+    })
+    expect(store.pendingConfirmation).toBeNull()
+    expect(store.stage).toBe('FAILED')
+    expect(store.error).toMatchObject({ recoverable: false })
     await expect(store.confirmOperation('confirmation-1')).resolves.toBe(false)
     expect(store.staleConfirmationIds).toContain('confirmation-1')
     expect(add).not.toHaveBeenCalled()
@@ -609,6 +649,89 @@ describe('agent conversation store', () => {
     await expect(store.sendMessage('Do not duplicate the ambiguous write')).resolves.toBe(false)
     await expect(store.confirmOperation('confirmation-1')).resolves.toBe(false)
     expect(add).not.toHaveBeenCalled()
+
+    expect(store.operationAttempts).toEqual([
+      expect.objectContaining({
+        confirmationId: 'confirmation-1',
+        idempotencyKey: 'operation-1',
+        status: 'ambiguous',
+        snapshot,
+      }),
+    ])
+    store.resetConversation()
+    expect(store.operationAttempts).toEqual([
+      expect.objectContaining({ status: 'acknowledged' }),
+    ])
+    expect(store.canSend).toBe(true)
+  })
+
+  it('lets a hydrated unknown write dominate a distinct pending confirmation globally', async () => {
+    const attempted = confirmation({
+      id: 'confirmation-a',
+      idempotencyKey: 'operation-a',
+      payloadHash: 'payload-a',
+    })
+    const pending = confirmation({
+      id: 'confirmation-b',
+      skuId: 'sku-b',
+      idempotencyKey: 'operation-b',
+      payloadHash: 'payload-b',
+    })
+    localStorage.setItem('agent-test', JSON.stringify({
+      protocolState: {
+        ...initialAgentProtocolState,
+        lastEventId: 2,
+        trail: [{
+          stage: 'WAIT_CONFIRMATION',
+          label: 'Awaiting confirmation',
+          status: 'running',
+        }],
+        pendingConfirmation: pending,
+        stage: 'FAILED',
+        error: {
+          code: 'NETWORK_ERROR',
+          message: 'Connection dropped',
+          recoverable: true,
+        },
+      },
+      lastRequest: {
+        message: 'Persisted operation B',
+        operationScope: 'persisted-operation-b',
+      },
+      confirmationSnapshots: {
+        'confirmation-a': attempted,
+        'confirmation-b': pending,
+      },
+      staleConfirmationIds: [],
+      rejectedConfirmationIds: [],
+      attemptedIdempotencyKeys: ['operation-a'],
+    }))
+    const hydratedPinia = createPinia()
+    hydratedPinia.use(piniaPluginPersistedstate)
+    createApp({}).use(hydratedPinia)
+    setActivePinia(hydratedPinia)
+    const store = useTestAgentStore()
+    const cart = useCartStore()
+    const add = vi.spyOn(cart, 'addcart')
+
+    expect(store.pendingConfirmation).toBeNull()
+    expect(store.stage).toBe('FAILED')
+    expect(store.error).toMatchObject({ recoverable: false })
+    expect(store.canSend).toBe(false)
+    expect(store.canRetry).toBe(false)
+    expect(store.trail.find((item) => item.stage === 'WAIT_CONFIRMATION')).toMatchObject({
+      status: 'failed',
+    })
+    expect(store.operationAttempts).toEqual([
+      expect.objectContaining({
+        confirmationId: 'confirmation-a',
+        idempotencyKey: 'operation-a',
+        status: 'ambiguous',
+        snapshot: attempted,
+      }),
+    ])
+    await expect(store.confirmOperation('confirmation-b')).resolves.toBe(false)
+    expect(add).not.toHaveBeenCalled()
   })
 
   it('drops a hydrated pending confirmation that differs from its frozen snapshot', async () => {
@@ -724,10 +847,17 @@ describe('agent conversation store', () => {
   it('does not share an in-flight write after a same-ID confirmation becomes stale', async () => {
     const replace = deferred<void>()
     transport = transportFrom(async function* () {
-      yield { id: 1, type: 'confirmation.requested', confirmation: confirmation() }
+      yield {
+        id: 1,
+        type: 'trail.updated',
+        stage: 'WAIT_CONFIRMATION',
+        label: 'Awaiting confirmation',
+        status: 'running',
+      }
+      yield { id: 2, type: 'confirmation.requested', confirmation: confirmation() }
       await replace.promise
       yield {
-        id: 2,
+        id: 3,
         type: 'confirmation.requested',
         confirmation: confirmation({ payloadHash: 'payload-replaced' }),
       }
@@ -752,6 +882,9 @@ describe('agent conversation store', () => {
     expect(store.completedConfirmationIds).toContain('confirmation-1')
     expect(store.stage).toBe('FAILED')
     expect(store.error).toMatchObject({ recoverable: false })
+    expect(store.trail.find((item) => item.stage === 'WAIT_CONFIRMATION')).toMatchObject({
+      status: 'failed',
+    })
   })
 
   it('blocks a distinct confirmation while any cart write is in flight', async () => {
@@ -794,7 +927,14 @@ describe('agent conversation store', () => {
 
   it('keeps an ambiguous failed cart write from being invoked a second time', async () => {
     transport = transportFrom(async function* () {
-      yield { id: 1, type: 'confirmation.requested', confirmation: confirmation() }
+      yield {
+        id: 1,
+        type: 'trail.updated',
+        stage: 'WAIT_CONFIRMATION',
+        label: 'Awaiting confirmation',
+        status: 'running',
+      }
+      yield { id: 2, type: 'confirmation.requested', confirmation: confirmation() }
     })
     const store = useTestAgentStore()
     const cart = useCartStore()
@@ -816,10 +956,16 @@ describe('agent conversation store', () => {
       recoverable: false,
       message: expect.stringMatching(/cart|outcome|unknown/i),
     })
+    expect(store.trail.find((item) => item.stage === 'WAIT_CONFIRMATION')).toMatchObject({
+      status: 'failed',
+    })
     expect(store.canSend).toBe(false)
     await expect(store.sendMessage('Do not duplicate the ambiguous write')).resolves.toBe(false)
     store.resetConversation()
     expect(store.canSend).toBe(true)
+    expect(store.operationAttempts).toEqual([
+      expect.objectContaining({ status: 'acknowledged' }),
+    ])
   })
 
   it('does not clear or leak an in-flight confirmation write across reset', async () => {
@@ -847,6 +993,96 @@ describe('agent conversation store', () => {
     expect(store.pendingConfirmation).toBeNull()
     expect(store.completedConfirmationIds).toEqual([])
     expect(store.canSend).toBe(true)
+  })
+
+  it('persists an unresolved write across reset and hydration before blocking all new work', async () => {
+    let streamCall = 0
+    const stream = vi.fn(async function* () {
+      streamCall += 1
+      const proposed = streamCall === 1
+        ? confirmation({ id: 'confirmation-a', idempotencyKey: 'operation-a' })
+        : confirmation({
+            id: 'confirmation-b',
+            skuId: 'sku-b',
+            payloadHash: 'payload-b',
+            idempotencyKey: 'operation-b',
+          })
+      yield {
+        id: 1,
+        type: 'trail.updated',
+        stage: 'WAIT_CONFIRMATION',
+        label: 'Awaiting confirmation',
+        status: 'running',
+      } satisfies AgentEvent
+      yield { id: 2, type: 'confirmation.requested', confirmation: proposed } satisfies AgentEvent
+      yield { id: 3, type: 'stream.completed' } satisfies AgentEvent
+    })
+    transport = transportFrom(stream)
+    const persistedPinia = createPinia()
+    persistedPinia.use(piniaPluginPersistedstate)
+    createApp({}).use(persistedPinia)
+    setActivePinia(persistedPinia)
+    const seed = useTestAgentStore()
+    const seedCart = useCartStore()
+    const added = deferred<void>()
+    const seedAdd = vi.spyOn(seedCart, 'addcart').mockImplementation(() => added.promise)
+    await seed.sendMessage('Prepare operation A')
+    const write = seed.confirmOperation('confirmation-a')
+
+    seed.resetConversation()
+    await vi.waitFor(() => {
+      const persisted = JSON.parse(localStorage.getItem('agent-test') ?? '{}') as {
+        attemptedIdempotencyKeys?: string[]
+        operationAttempts?: Array<{
+          confirmationId?: string
+          idempotencyKey?: string
+          status?: string
+          snapshot?: OperationConfirmation
+        }>
+      }
+      expect(persisted.attemptedIdempotencyKeys).toContain('operation-a')
+      expect(persisted.operationAttempts).toEqual([
+        expect.objectContaining({
+          confirmationId: 'confirmation-a',
+          idempotencyKey: 'operation-a',
+          status: 'in_flight',
+          snapshot: expect.objectContaining({ id: 'confirmation-a' }),
+        }),
+      ])
+    })
+
+    const hydratedPinia = createPinia()
+    hydratedPinia.use(piniaPluginPersistedstate)
+    createApp({}).use(hydratedPinia)
+    setActivePinia(hydratedPinia)
+    const hydrated = useTestAgentStore()
+    const hydratedCart = useCartStore()
+    const hydratedAdd = vi.spyOn(hydratedCart, 'addcart').mockResolvedValue(undefined)
+
+    const retryResult = await hydrated.retry()
+    const sendResult = await hydrated.sendMessage('Prepare operation B')
+    const confirmResult = await hydrated.confirmOperation('confirmation-b')
+    added.resolve()
+    await write
+
+    expect(hydrated.operationAttempts).toEqual([
+      expect.objectContaining({
+        confirmationId: 'confirmation-a',
+        idempotencyKey: 'operation-a',
+        status: 'ambiguous',
+        snapshot: expect.objectContaining({ id: 'confirmation-a' }),
+      }),
+    ])
+    expect(hydrated.pendingConfirmation).toBeNull()
+    expect(hydrated.error).toMatchObject({ recoverable: false })
+    expect(hydrated.canSend).toBe(false)
+    expect(hydrated.canRetry).toBe(false)
+    expect(retryResult).toBe(false)
+    expect(sendResult).toBe(false)
+    expect(confirmResult).toBe(false)
+    expect(stream).toHaveBeenCalledTimes(1)
+    expect(seedAdd).toHaveBeenCalledTimes(1)
+    expect(hydratedAdd).not.toHaveBeenCalled()
   })
 
   it('keeps a confirmed workflow complete when its still-open transport later disconnects', async () => {
