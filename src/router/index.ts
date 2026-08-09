@@ -52,8 +52,7 @@ export const routes: RouteRecordRaw[] = [
   {
     path: '/agent',
     name: 'agent',
-    redirect: { name: 'home' },
-    meta: { agentWorkspacePending: true },
+    component: () => import('@/views/agent/AgentIndex.vue'),
   },
 ]
 

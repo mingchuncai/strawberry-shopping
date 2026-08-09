@@ -1,0 +1,36 @@
+$berry-red: #E9435E;
+$ripe-red: #C92F4A;
+$leaf-green: #34745A;
+$cream: #FFF8F3;
+$blush: #FBE2E6;
+$cocoa: #35282C;
+$stone: #766B6E;
+$semantic-error: #9D352F;
+
+$font-sans: "MiSans", "PingFang SC", "Microsoft YaHei", system-ui, -apple-system,
+  BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+@mixin agent-design-tokens {
+  --agent-berry-red: #{$berry-red};
+  --agent-ripe-red: #{$ripe-red};
+  --agent-leaf-green: #{$leaf-green};
+  --agent-cream: #{$cream};
+  --agent-blush: #{$blush};
+  --agent-cocoa: #{$cocoa};
+  --agent-stone: #{$stone};
+  --agent-error: #{$semantic-error};
+  --agent-surface: #FFFFFF;
+  --agent-line: rgba(53, 40, 44, 0.14);
+  --agent-line-strong: rgba(53, 40, 44, 0.24);
+  --agent-space-1: 4px;
+  --agent-space-2: 8px;
+  --agent-space-3: 12px;
+  --agent-space-4: 16px;
+  --agent-space-5: 24px;
+  --agent-space-6: 32px;
+  --agent-radius-sm: 4px;
+  --agent-radius-md: 8px;
+  --agent-radius-lg: 12px;
+  --agent-shadow: 0 12px 36px rgba(53, 40, 44, 0.08);
+  --agent-motion: 180ms ease;
+}
