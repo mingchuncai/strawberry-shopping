@@ -14,9 +14,11 @@ export default defineConfig({
     vue(),
     vueDevTools(),
     AutoImport({
+      dts: false,
       resolvers: [ElementPlusResolver()],
     }),
     Components({
+      dts: false,
       resolvers: [
         ElementPlusResolver({importStyle: 'sass'}),
       ],
