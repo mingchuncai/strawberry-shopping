@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import BerryTrail from '@/features/agent/components/BerryTrail.vue'
+import berryTrailSource from '@/features/agent/components/BerryTrail.vue?raw'
 
 const trail = [
   { stage: 'UNDERSTAND', label: 'Request understood', status: 'completed' },
@@ -33,7 +34,7 @@ describe('BerryTrail', () => {
     expect(wrapper.findAll('[aria-current]')).toHaveLength(1)
   })
 
-  it('keeps status meaning available without color or motion', () => {
+  it('keeps status meaning available without color and retains it with reduced motion', () => {
     const wrapper = mount(BerryTrail, { props: { trail } })
     const componentSource = wrapper.html()
 
@@ -41,5 +42,14 @@ describe('BerryTrail', () => {
     expect(componentSource).toContain('In progress')
     expect(componentSource).toContain('Pending')
     expect(componentSource).toContain('Needs attention')
+    expect(berryTrailSource).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.berry-trail__seed \{\s*transition-duration: 0\.01ms;\s*\}\s*\}/,
+    )
+  })
+
+  it('uses the shared agent motion token for seed status changes', () => {
+    expect(berryTrailSource).toContain(
+      'transition: transform var(--agent-motion), opacity var(--agent-motion);',
+    )
   })
 })

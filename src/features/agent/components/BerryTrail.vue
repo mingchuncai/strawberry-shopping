@@ -64,7 +64,7 @@ const statusLabels: Record<TrailStatus, string> = {
   background: var(--agent-surface);
   transform: rotate(18deg) scale(0.9);
   opacity: 0.72;
-  transition: transform 180ms ease, opacity 180ms ease;
+  transition: transform var(--agent-motion), opacity var(--agent-motion);
 }
 
 .berry-trail__copy {
@@ -113,7 +113,7 @@ const statusLabels: Record<TrailStatus, string> = {
 
 @media (prefers-reduced-motion: reduce) {
   .berry-trail__seed {
-    transition: none;
+    transition-duration: 0.01ms;
   }
 }
 </style>
