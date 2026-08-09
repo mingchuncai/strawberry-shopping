@@ -3,9 +3,10 @@
 import { ref} from 'vue'
 import {ElMessage} from 'element-plus'
 import 'element-plus/es/components/message/style/css'
-import {useRouter} from 'vue-router'
+import {useRoute, useRouter} from 'vue-router'
 
 import {useUserStore} from '@/stores/user'
+import {getSafeRedirect} from '@/router'
 
 const userstore = useUserStore()
 
@@ -43,6 +44,7 @@ const rules={
 //3.获取form实例做统一校验
 const formref=ref(null)
 const router=useRouter()
+const route=useRoute()
 const dologin=async()=>{
   try {
     // 1. 改用 Promise 写法校验表单（Element Plus 官方推荐）
@@ -57,7 +59,7 @@ const dologin=async()=>{
 
     // 4. 登录成功提示 + 跳转（能执行到这步说明无异常）
     ElMessage({type:'success',message:'登录成功'})
-    router.replace('/')
+    router.replace(getSafeRedirect(route.query.redirect))
   } catch (error) {
     // 捕获所有异常：表单校验失败、登录接口报错、合并购物车报错
     console.error('登录失败：', error)
