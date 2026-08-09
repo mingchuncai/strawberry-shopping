@@ -9,8 +9,8 @@ const api = vi.hoisted(() => ({
   mergeCartAPI: vi.fn(),
 }))
 
-vi.mock('@/apis/cart', () => api)
-vi.mock('@/apis/user', () => ({ loginapi: vi.fn() }))
+vi.mock('@/api/cart', () => api)
+vi.mock('@/api/user', () => ({ loginapi: vi.fn() }))
 vi.mock('element-plus', () => ({ ElMessage: vi.fn() }))
 
 import { usecartstore } from '@/stores/cartstore'

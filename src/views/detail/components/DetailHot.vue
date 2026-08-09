@@ -1,5 +1,5 @@
 <script setup>
-import {getHotGoodsAPI} from "@/apis/detail"
+import {getHotGoodsAPI} from "@/api/detail"
 import { computed, onMounted, ref } from "vue";
 import {useRoute} from "vue-router"
 

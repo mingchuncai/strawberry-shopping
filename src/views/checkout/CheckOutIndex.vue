@@ -1,5 +1,5 @@
 <script setup>
-import {getcheckinfoapi,createorderapi} from "@/apis/checkout"
+import {getcheckinfoapi,createorderapi} from "@/api/checkout"
 import {useRouter} from 'vue-router'
 import { onMounted, ref } from "vue";
 import {usecartstore} from "@/stores/cartstore"

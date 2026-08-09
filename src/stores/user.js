@@ -1,9 +1,9 @@
 //管理用户类数据相关
 import { ref } from "vue"
 import { defineStore } from "pinia"
-import { loginapi } from "@/apis/user"
+import { loginapi } from "@/api/user"
 import { usecartstore } from "./cartstore"
-import { mergeCartAPI } from "@/apis/cart"
+import { mergeCartAPI } from "@/api/cart"
 
 export const userStore = defineStore('user', () => {
   const cartstore = usecartstore()

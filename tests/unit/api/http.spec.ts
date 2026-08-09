@@ -10,8 +10,8 @@ const message = vi.hoisted(() => vi.fn())
 vi.mock('@/router', () => ({ default: router }))
 vi.mock('element-plus', () => ({ ElMessage: message }))
 vi.mock('element-plus/es/components/message/style/css', () => ({}))
-vi.mock('@/apis/user', () => ({ loginapi: vi.fn() }))
-vi.mock('@/apis/cart', () => ({
+vi.mock('@/api/user', () => ({ loginapi: vi.fn() }))
+vi.mock('@/api/cart', () => ({
   insertCartAPI: vi.fn(),
   findNewCartListAPI: vi.fn(),
   deleteCartAPI: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('@/apis/cart', () => ({
   mergeCartAPI: vi.fn(),
 }))
 
-import http from '@/utils/http'
+import { httpInstance as http } from '@/api/http'
 import { userStore } from '@/stores/user'
 
 describe('HTTP error handling', () => {

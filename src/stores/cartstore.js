@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {userStore} from './user'
-import {insertCartAPI,findNewCartListAPI,deleteCartAPI,updateCartItemAPI} from '@/apis/cart'
+import {insertCartAPI,findNewCartListAPI,deleteCartAPI,updateCartItemAPI} from '@/api/cart'
 export const usecartstore=defineStore('cart',()=>{
   const userstore=userStore()
   const islogin=computed(()=>userstore.userInfo.token)

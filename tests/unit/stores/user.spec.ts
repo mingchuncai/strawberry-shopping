@@ -7,8 +7,8 @@ const api = vi.hoisted(() => ({
   findNewCartListAPI: vi.fn(),
 }))
 
-vi.mock('@/apis/user', () => ({ loginapi: api.loginapi }))
-vi.mock('@/apis/cart', () => ({
+vi.mock('@/api/user', () => ({ loginapi: api.loginapi }))
+vi.mock('@/api/cart', () => ({
   insertCartAPI: vi.fn(),
   findNewCartListAPI: api.findNewCartListAPI,
   deleteCartAPI: vi.fn(),
