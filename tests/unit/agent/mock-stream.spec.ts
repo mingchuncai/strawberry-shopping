@@ -56,6 +56,13 @@ describe('mock agent SSE transport', () => {
     expect(parsed.map(parseAgentEvent)).toEqual([rawEvent])
   })
 
+  it('drops an unterminated SSE frame at EOF', () => {
+    const rawEvent = { id: 1, type: 'message.delta' as const, messageId: 'mock-coffee-message-1', delta: '安静咖啡' }
+    const truncated = new TextEncoder().encode(toMockSseFrame(rawEvent).slice(0, -2))
+
+    expect([...parseMockSseChunks([truncated])]).toEqual([])
+  })
+
   it('stops its pending timer and completes cleanly when aborted', async () => {
     vi.useFakeTimers()
     const controller = new AbortController()
@@ -63,6 +70,20 @@ describe('mock agent SSE transport', () => {
     const next = iterator.next()
 
     expect(vi.getTimerCount()).toBe(1)
+    controller.abort()
+
+    await expect(next).resolves.toEqual({ done: true, value: undefined })
+    expect(vi.getTimerCount()).toBe(0)
+    vi.useRealTimers()
+  })
+
+  it.each([0, 100])('does not yield after abort wins the delay-%s race', async (delayMs) => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const iterator = createMockAgentTransport({ delayMs }).stream(request, { signal: controller.signal })[Symbol.asyncIterator]()
+    const next = iterator.next()
+
+    if (delayMs > 0) vi.advanceTimersByTime(delayMs)
     controller.abort()
 
     await expect(next).resolves.toEqual({ done: true, value: undefined })

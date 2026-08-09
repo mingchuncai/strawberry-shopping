@@ -50,11 +50,7 @@ export function* parseMockSseChunks(chunks: Iterable<Uint8Array>): Generator<unk
     }
   }
 
-  buffered += decoder.decode()
-  if (buffered) {
-    const parsed = parseSseFrame(buffered)
-    if (parsed) yield parsed
-  }
+  decoder.decode()
 }
 
 const waitForDelay = (delayMs: number, signal: AbortSignal): Promise<boolean> => {
@@ -94,7 +90,10 @@ export const createMockAgentTransport = (options: {
       for (const event of quietDormitoryCoffeeScenario) {
         if (event.id <= afterEventId) continue
         if (!(await waitForDelay(delayMs, signal))) return
-        yield parseFramedEvent(event)
+        if (signal.aborted) return
+        const parsed = parseFramedEvent(event)
+        if (signal.aborted) return
+        yield parsed
         if (event.id === options.failAfterEventId) throw new MockStreamDisconnectedError(event.id)
       }
     },
