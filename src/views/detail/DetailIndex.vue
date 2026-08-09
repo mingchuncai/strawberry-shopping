@@ -20,14 +20,10 @@ onMounted(()=>{
 //sku被操作时
 let skuobj={}
 const skuchange=(sku)=>{
-  console.log(sku)
   skuobj=sku
 }
 //count被操作时
 const count=ref(0)
-const countchange=(count)=>{
-  console.log(count)
-}
 //add cart
 const addcart=()=>{
   if(skuobj.skuId){
@@ -119,7 +115,7 @@ const addcart=()=>{
               <!-- sku组件 -->
                <XtxSku :goods="goods" @change="skuchange"/>
               <!-- 数据组件 -->
-               <el-input-number v-model="count" @change="countchange" />
+               <el-input-number v-model="count" />
               <!-- 按钮组件 -->
               <div>
                 <el-button size="large" class="btn" @click="addcart" >

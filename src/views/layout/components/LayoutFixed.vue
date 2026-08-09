@@ -13,7 +13,7 @@ const CategoryStore = categoryStore()
 <template>
   <div class="app-header-sticky " :class="{show:y>78}">
     <div class="container">
-      <RouterLink class="logo" to="/" />
+      <RouterLink class="logo" to="/" aria-label="BerryPilot AI 首页" />
       <!-- 导航区域 -->
       <ul class="app-header-nav">
         <li class="home" v-for="item in CategoryStore.categorylist" :key="item.id">
@@ -58,7 +58,7 @@ const CategoryStore = categoryStore()
   .logo {
     width: 200px;
     height: 80px;
-    background: url("@/assets/images/logo.png") no-repeat right 2px;
+    background: url("@/assets/brand/berrypilot-mark.svg") no-repeat right 2px;
     background-size: 160px auto;
   }
 

@@ -5,7 +5,6 @@ import { useRouter } from 'vue-router'
 const router = useRouter()
 const userstore = useUserStore()
 const confirm = () => {
-  console.log('用户要退出登录了')
   userstore.clearuserinfo()
   router.push('/login')
 }
@@ -18,7 +17,7 @@ const confirm = () => {
         <!-- 多模版渲染 区分登录状态和非登录状态 -->
 
         <!-- 适配思路: 登录时显示第一块 非登录时显示第二块  是否有token -->
-        <template v-if="userstore.userInfo.token">
+        <template v-if="userstore.userInfo?.token">
           <li><a href="javascript:;"><i class=" icon-yonghu1"></i>{{ userstore.userInfo.account }}</a></li>
           <li>
             <el-popconfirm @confirm="confirm" title="确认退出吗?" confirm-button-text="确认" cancel-button-text="取消">

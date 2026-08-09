@@ -32,7 +32,6 @@ onMounted(() => {
 
 //tab切换回调
 const tabChange=()=>{
-  console.log("i am changed",reqData.value.sortField)
   getSubCategory()
   reqData.value.page=1
 }

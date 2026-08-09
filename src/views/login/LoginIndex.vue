@@ -13,7 +13,7 @@ const userstore = useUserStore()
 //1.准备表单对象
 const form=ref({
   account:'xiaotuxian001',
-  password:'123456',
+  password:'',
   agree:true
 })
 
@@ -60,9 +60,8 @@ const dologin=async()=>{
     // 4. 登录成功提示 + 跳转（能执行到这步说明无异常）
     ElMessage({type:'success',message:'登录成功'})
     router.replace(getSafeRedirect(route.query.redirect))
-  } catch (error) {
+  } catch {
     // 捕获所有异常：表单校验失败、登录接口报错、合并购物车报错
-    console.error('登录失败：', error)
     ElMessage({type:'error',message:'登录失败，请检查账号密码或网络'})
   }
 }
@@ -75,7 +74,7 @@ const dologin=async()=>{
     <header class="login-header">
       <div class="container m-top-20">
         <h1 class="logo">
-          <RouterLink to="/">小兔鲜</RouterLink>
+          <RouterLink to="/">BerryPilot AI</RouterLink>
         </h1>
         <RouterLink class="entry" to="/">
           进入网站首页
@@ -121,7 +120,7 @@ const dologin=async()=>{
           <a href="javascript:;">搜索推荐</a>
           <a href="javascript:;">友情链接</a>
         </p>
-        <p>CopyRight &copy; 小兔鲜儿</p>
+        <p>BerryPilot AI · Pick better. Shop with clarity.</p>
       </div>
     </footer>
   </div>
@@ -146,7 +145,7 @@ const dologin=async()=>{
       height: 132px;
       width: 100%;
       text-indent: -9999px;
-      background: url("@/assets/images/logo.png") no-repeat center 18px / contain;
+      background: url("@/assets/brand/berrypilot-mark.svg") no-repeat center 18px / contain;
     }
   }
 

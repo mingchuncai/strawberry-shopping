@@ -14,7 +14,7 @@
         </dl>
         <dl>
           <dt>下载APP</dt>
-          <dd class="qrcode"><img src="@/assets/images/qrcode.jpg" /></dd>
+          <dd class="qrcode"><img src="@/assets/images/qrcode.jpg" alt="应用下载二维码占位图" /></dd>
           <dd class="download">
             <span>扫描二维码</span>
             <span>立马下载APP</span>
@@ -53,7 +53,7 @@
             <a href="javascript:;">搜索推荐</a>
             <a href="javascript:;">友情链接</a>
           </p>
-          <p>CopyRight © 小兔鲜儿</p>
+          <p>BerryPilot AI · 把偏好说出来，把选择交给证据</p>
         </div>
       </div>
     </div>

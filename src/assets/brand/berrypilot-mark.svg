@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 96" role="img" aria-labelledby="title desc">
+  <title id="title">BerryPilot AI</title>
+  <desc id="desc">三颗莓果组成的任务轨迹标志</desc>
+  <g fill="none" fill-rule="evenodd">
+    <path d="M25 68c20-30 47-38 76-25" stroke="#34745A" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 12"/>
+    <path d="M68 20c7-11 18-14 31-9-7 12-17 16-31 9Z" fill="#34745A"/>
+    <circle cx="45" cy="58" r="18" fill="#E9435E"/>
+    <circle cx="76" cy="48" r="21" fill="#C92F4A"/>
+    <circle cx="104" cy="65" r="15" fill="#E9435E"/>
+    <circle cx="39" cy="52" r="4" fill="#FFF8F3" opacity=".75"/>
+    <circle cx="69" cy="40" r="5" fill="#FFF8F3" opacity=".75"/>
+    <text x="137" y="53" fill="#35282C" font-family="Arial, sans-serif" font-size="34" font-weight="700">BerryPilot</text>
+    <text x="139" y="76" fill="#766B6E" font-family="Arial, sans-serif" font-size="16" letter-spacing="4">AI</text>
+  </g>
+</svg>
