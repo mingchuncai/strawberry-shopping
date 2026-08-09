@@ -3,8 +3,7 @@ import { usecartstore } from '@/stores/cartstore'
 const cartStore = usecartstore()
 //单选回调
 const singleCheck = (i,selected) => {
-  console.log(i,selected)
-  cartStore.singleCheckcmc(i.skuId,selected)
+  cartStore.setSelected(i.skuId,selected)
 }
 
 //全选回调
@@ -51,16 +50,16 @@ const allCheck = (selected) => {
                 <p>¥{{ i.price }}</p>
               </td>
               <td class="tc">
-                <el-input-number v-model="i.count" />
+                <el-input-number :model-value="i.count" @change="(count) => cartStore.setCount(i.skuId, count)" />
               </td>
               <td class="tc">
                 <p class="f16 red">¥{{ (i.price * i.count) .toFixed(2)}}</p>
               </td>
               <td class="tc">
                 <p>
-                  <el-popconfirm title="确认删除吗?" confirm-button-text="确认" cancel-button-text="取消" @confirm="cartStore.delcart(i)">
+                  <el-popconfirm title="确认删除吗?" confirm-button-text="确认" cancel-button-text="取消" @confirm="cartStore.delcart(i.skuId)">
                     <template #reference>
-                      <a href="javascript:;" @click="cartStore.deletecart(i.skuId)">删除</a>
+                      <a href="javascript:;">删除</a>
                     </template>
                   </el-popconfirm>
                 </p>

@@ -2,7 +2,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {userStore} from './user'
-import {insertcartapi,findNewCartListAPI,delcartapi} from '@/apis/cart'
+import {insertCartAPI,findNewCartListAPI,deleteCartAPI,updateCartItemAPI} from '@/apis/cart'
 export const usecartstore=defineStore('cart',()=>{
   const userstore=userStore()
   const islogin=computed(()=>userstore.userInfo.token)
@@ -17,14 +17,14 @@ export const usecartstore=defineStore('cart',()=>{
   const addcart=async(goods)=>{
     const {skuId,count}=goods
     if(islogin.value){
-      await insertcartapi({skuId,count})
+      await insertCartAPI({skuId,count})
       await updatenewlist()
     }else{
       const item=cartList.value.find((item)=>goods.skuId===item.skuId)
     if(!item){
       cartList.value.push(goods)
   }else{
-    item.count++
+    item.count += count
   }
     }
 
@@ -33,7 +33,7 @@ export const usecartstore=defineStore('cart',()=>{
 const delcart=async(skuId)=>{
   if(islogin.value){
     // 登录态：调用后端接口+刷新列表
-    await delcartapi([skuId])
+    await deleteCartAPI([skuId])
     await updatenewlist() // 加await，确保列表刷新完成
   }else{
     // 未登录态：修正find→findIndex，且校验索引有效性
@@ -47,7 +47,7 @@ const delcart=async(skuId)=>{
 
 const deletecart=(skuId)=>{
   const idx=cartList.value.findIndex((item)=>skuId===item.skuId)
-  cartList.value.splice(idx,1)
+  if(idx > -1) cartList.value.splice(idx,1)
 }
 
 //退出登录，清除购物车
@@ -55,9 +55,23 @@ const clearcart=()=>{
   cartList.value=[]
 }
 //单选
-const singleCheckcmc =(skuId,selected)=>{
+const setSelected = async (skuId,selected)=>{
   const item=cartList.value.find((item)=>item.skuId===skuId)
+  if(!item) return
   item.selected=selected
+  if(islogin.value){
+    await updateCartItemAPI(skuId,{count:item.count,selected})
+  }
+}
+const singleCheckcmc = setSelected
+
+const setCount = async (skuId,count)=>{
+  const item=cartList.value.find((item)=>item.skuId===skuId)
+  if(!item) return
+  item.count=Math.min(99,Math.max(1,count))
+  if(islogin.value){
+    await updateCartItemAPI(skuId,{count:item.count,selected:item.selected})
+  }
 }
 //caculate
 //count
@@ -65,7 +79,7 @@ const allcount=computed(()=>cartList.value.reduce((a,c)=>a+c.count,0))
 const allprice=computed(()=>cartList.value.reduce((a,c)=>a+c.count*c.price,0))
 //是否呈现
 const isall=computed(()=>
-  cartList.value.every((item)=>item.selected)
+  cartList.value.length > 0 && cartList.value.every((item)=>item.selected)
 )
 //全选
 const allcheckcmc=(selected)=>{
@@ -76,7 +90,7 @@ const selectedCount=computed(()=>cartList.value.filter((item)=>item.selected).re
 const selectedPrice=computed(()=>cartList.value.filter((item)=>item.selected).reduce((a,c)=>a+c.count*c.price,0))
 
 return {
-  cartList,addcart,deletecart,allcount,allprice,singleCheckcmc,isall,allcheckcmc,selectedCount,selectedPrice,delcart,clearcart,updatenewlist}
+  cartList,addcart,deletecart,allcount,allprice,singleCheckcmc,setSelected,setCount,isall,allcheckcmc,selectedCount,selectedPrice,delcart,clearcart,updatenewlist}
 },
 {
   persist:true

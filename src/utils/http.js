@@ -25,21 +25,26 @@ httpinstance.interceptors.request.use(config=>{
 } ,e=>Promise.reject(e))
 //axios响应式拦截器
 httpinstance.interceptors.response.use(res=>res.data,e=>{
-  //统一错误提示
-  ElMessage(
-    {
-      type:'error',
-      message:e.response.data.message
-    }
-  )
+  const status=e.response?.status
+  const message=e.response?.data?.message || e.message || '网络请求失败'
+  const error={
+    code:status===401 ? 'UNAUTHORIZED' : e.response ? 'API_ERROR' : 'NETWORK_ERROR',
+    message,
+    status,
+    recoverable:status!==401,
+    cause:e
+  }
+  ElMessage({type:'error',message})
   //401
   //清除本地数据
   //跳转登录页
-  if(e.response.status===401){
+  if(status===401){
     userStore().clearuserinfo()
-    //跳转登录页
-    router.push('/login')
+    router.push({
+      path:'/login',
+      query:{redirect:router.currentRoute.value.fullPath}
+    })
   }
-  return Promise.reject(e)
+  return Promise.reject(error)
 } )
 export default httpinstance

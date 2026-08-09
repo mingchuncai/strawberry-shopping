@@ -2,7 +2,7 @@
 import request from '@/utils/http'
 
 // 加入购物车
-export const insertcartapi = ({ skuId, count }) => {
+export const insertCartAPI = ({ skuId, count }) => {
   return request({
     url: '/member/cart',
     method: 'POST',
@@ -21,7 +21,7 @@ export const findNewCartListAPI = () => {
 }
 
 // 删除购物车
-export const delCartAPI = (ids) => {
+export const deleteCartAPI = (ids) => {
   return request({
     url: '/member/cart',
     method: 'DELETE',
@@ -41,21 +41,10 @@ export const mergeCartAPI = (data) => {
   })
 }
 
-export const delcartapi=(ids)=>{
+export const updateCartItemAPI = (skuId, { count, selected }) => {
   return request({
-    url:'/member/cart',
-    method:'DELETE',
-    data:{
-      ids
-    }
-  })
-}
-
-//合并购物车接口
-export const mergecartapi=(data)=>{
-  return request({
-    url:'/member/cart/merge',
-    method:'POST',
-    data
+    url: `/member/cart/${skuId}`,
+    method: 'PUT',
+    data: { count, selected }
   })
 }
