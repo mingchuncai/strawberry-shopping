@@ -113,7 +113,7 @@ const statusLabels: Record<TrailStatus, string> = {
 
 @media (prefers-reduced-motion: reduce) {
   .berry-trail__seed {
-    transition-duration: 0.01ms;
+    transition: none;
   }
 }
 </style>

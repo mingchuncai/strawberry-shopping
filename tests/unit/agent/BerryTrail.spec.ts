@@ -43,8 +43,12 @@ describe('BerryTrail', () => {
     expect(componentSource).toContain('Pending')
     expect(componentSource).toContain('Needs attention')
     expect(berryTrailSource).toMatch(
-      /@media \(prefers-reduced-motion: reduce\) \{\s*\.berry-trail__seed \{\s*transition-duration: 0\.01ms;\s*\}\s*\}/,
+      /@media \(prefers-reduced-motion: reduce\) \{\s*\.berry-trail__seed \{\s*transition: none;\s*\}\s*\}/,
     )
+  })
+
+  it('does not use a duration workaround when reduced motion is requested', () => {
+    expect(berryTrailSource).not.toContain('transition-duration: 0.01ms;')
   })
 
   it('uses the shared agent motion token for seed status changes', () => {
