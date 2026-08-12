@@ -77,7 +77,6 @@ describe('OperationConfirmationCard', () => {
     ['pending', '正在加入购物车，请稍候。'],
     ['stale', '此确认已过期，无法执行。请重新选择当前提案。'],
     ['invalid', '此确认与当前商品提案不匹配，无法执行。'],
-    ['unavailable', '此操作当前不可用，购物车不会改变。'],
   ] as const)('disables both actions and explains the %s state', (state, explanation) => {
     const wrapper = mount(OperationConfirmationCard, { props: { confirmation, state } })
 
@@ -88,6 +87,30 @@ describe('OperationConfirmationCard', () => {
       .toHaveProperty('disabled')
     expect(wrapper.get('[data-testid="operation-confirmation"]').attributes('aria-busy'))
       .toBe(state === 'pending' ? 'true' : 'false')
+  })
+
+  it('renders a non-actionable unavailable state without inventing an operation snapshot', async () => {
+    const wrapper = mount(OperationConfirmationCard, {
+      props: { confirmation: null, state: 'unavailable' },
+    })
+
+    expect(wrapper.get('[data-testid="confirmation-state"]').text()).toContain(
+      '此操作当前不可用，购物车不会改变。',
+    )
+    expect(wrapper.find('[data-testid="operation-target"]').exists()).toBe(false)
+    expect(wrapper.find('.operation-confirmation-card__snapshot').exists()).toBe(false)
+
+    const confirm = wrapper.get('button[data-testid="confirm-operation"]')
+    const reject = wrapper.get('button[data-testid="reject-operation"]')
+    expect(confirm.attributes()).toHaveProperty('disabled')
+    expect(reject.attributes()).toHaveProperty('disabled')
+
+    confirm.element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    reject.element.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('confirm')).toBeUndefined()
+    expect(wrapper.emitted('reject')).toBeUndefined()
   })
 })
 

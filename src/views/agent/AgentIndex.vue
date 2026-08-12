@@ -15,10 +15,12 @@ type ConfirmationState = 'ready' | 'pending' | 'stale' | 'invalid' | 'unavailabl
 type ResultState = 'success' | 'failed' | 'unknown' | 'rejected'
 
 const selectedConfirmation = ref<OperationConfirmation | null>(null)
+const selectedProposal = ref<Recommendation | null>(null)
 const confirmationPending = ref(false)
 const operationResult = ref<{ status: ResultState; cartItemCount?: number } | null>(null)
 const selectionNotice = ref('')
 const resultCard = ref<{ focus: () => void } | null>(null)
+let operationGeneration = 0
 
 const messageEntries = computed(() => Object.values(agentStore.messages))
 const hasActivity = computed(() => Boolean(
@@ -42,13 +44,6 @@ const status = computed(() => {
   }
   if (agentStore.stage === 'COMPLETE') return { label: 'Request complete', state: 'ready' }
   return { label: 'Ready for request', state: 'ready' }
-})
-
-const trailSummary = computed(() => {
-  const latest = agentStore.trail.at(-1)
-  return latest
-    ? `${agentStore.trail.length} checkpoints available. Latest: ${latest.label}.`
-    : 'Checkpoint summaries will appear here while Berry works.'
 })
 
 const evidenceSummary = computed(() => {
@@ -84,14 +79,19 @@ const confirmationState = computed<ConfirmationState>(() => {
     : 'invalid'
 })
 
-const focusResult = async () => {
+const focusResult = async (generation: number) => {
   await nextTick()
+  if (generation !== operationGeneration) return
   resultCard.value?.focus()
 }
 
 const selectRecommendation = (recommendation: Recommendation) => {
+  if (confirmationPending.value) return
+
+  operationGeneration += 1
   const pending = agentStore.pendingConfirmation
   operationResult.value = null
+  selectedProposal.value = recommendation
   selectedConfirmation.value = null
   if (
     !pending ||
@@ -121,22 +121,43 @@ const confirmSelected = async (confirmationId: string) => {
     return
   }
 
+  const generation = operationGeneration
   confirmationPending.value = true
   try {
     const completed = await agentStore.confirmOperation(confirmationId)
-    operationResult.value = completed
+    if (generation !== operationGeneration) return
+
+    let completedSafely = completed &&
+      agentStore.completedConfirmationIds.includes(confirmationId) &&
+      agentStore.stage === 'COMPLETE' &&
+      !agentStore.error
+    let cartItemCount = 0
+    if (completedSafely) {
+      const { useCartStore } = await import('@/stores/cart')
+      if (generation !== operationGeneration) return
+      completedSafely = agentStore.completedConfirmationIds.includes(confirmationId) &&
+        agentStore.stage === 'COMPLETE' &&
+        !agentStore.error
+      cartItemCount = useCartStore().allcount
+    }
+    operationResult.value = completedSafely
       ? {
           status: 'success',
-          cartItemCount: agentStore.protocolState.cartItemCount ?? 0,
+          cartItemCount,
         }
-      : { status: isUnknownOutcome() ? 'unknown' : 'failed' }
+      : {
+          status: completed || isUnknownOutcome() ? 'unknown' : 'failed',
+        }
   } catch {
+    if (generation !== operationGeneration) return
     operationResult.value = { status: 'unknown' }
-  } finally {
-    confirmationPending.value = false
-    selectedConfirmation.value = null
   }
-  await focusResult()
+  if (generation !== operationGeneration) return
+
+  confirmationPending.value = false
+  selectedConfirmation.value = null
+  selectedProposal.value = null
+  await focusResult(generation)
 }
 
 const rejectSelected = async (confirmationId: string) => {
@@ -153,11 +174,14 @@ const rejectSelected = async (confirmationId: string) => {
     ? { status: 'rejected' }
     : { status: 'failed' }
   selectedConfirmation.value = null
-  await focusResult()
+  selectedProposal.value = null
+  await focusResult(operationGeneration)
 }
 
 const clearLocalOperation = () => {
+  operationGeneration += 1
   selectedConfirmation.value = null
+  selectedProposal.value = null
   confirmationPending.value = false
   operationResult.value = null
   selectionNotice.value = ''
@@ -219,6 +243,7 @@ const resetConversation = () => {
           class="agent-workspace__log"
           role="log"
           aria-label="Agent conversation messages"
+          aria-live="off"
         >
           <AgentMessageList
             :messages="messageEntries"
@@ -241,7 +266,7 @@ const resetConversation = () => {
           </p>
 
           <OperationConfirmationCard
-            v-if="selectedConfirmation && !operationResult"
+            v-if="selectedProposal && !operationResult"
             :confirmation="selectedConfirmation"
             :state="confirmationState"
             @confirm="confirmSelected"

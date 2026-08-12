@@ -11,7 +11,7 @@ type OperationConfirmationState =
   | 'unavailable'
 
 const props = defineProps<{
-  confirmation: OperationConfirmation
+  confirmation: OperationConfirmation | null
   state: OperationConfirmationState
 }>()
 
@@ -33,6 +33,16 @@ const formatPrice = (price: number): string => `RMB ${price.toLocaleString('en-U
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 })}`
+
+const confirm = () => {
+  if (disabled.value || !props.confirmation) return
+  emit('confirm', props.confirmation.id)
+}
+
+const reject = () => {
+  if (disabled.value || !props.confirmation) return
+  emit('reject', props.confirmation.id)
+}
 </script>
 
 <template>
@@ -47,12 +57,16 @@ const formatPrice = (price: number): string => `RMB ${price.toLocaleString('en-U
         <p class="operation-confirmation-card__eyebrow">Action requires confirmation</p>
         <h2 id="operation-confirmation-title">Review before the cart changes</h2>
       </div>
-      <span class="operation-confirmation-card__target" data-testid="operation-target">
+      <span
+        v-if="confirmation"
+        class="operation-confirmation-card__target"
+        data-testid="operation-target"
+      >
         Add to existing cart
       </span>
     </header>
 
-    <dl class="operation-confirmation-card__snapshot">
+    <dl v-if="confirmation" class="operation-confirmation-card__snapshot">
       <div class="operation-confirmation-card__product">
         <dt>Product</dt>
         <dd data-testid="operation-product-name">{{ confirmation.productName }}</dd>
@@ -97,7 +111,7 @@ const formatPrice = (price: number): string => `RMB ${price.toLocaleString('en-U
         data-testid="confirm-operation"
         type="button"
         :disabled="disabled"
-        @click="emit('confirm', confirmation.id)"
+        @click="confirm"
       >
         {{ state === 'pending' ? '正在加入…' : '确认加入' }}
       </button>
@@ -106,7 +120,7 @@ const formatPrice = (price: number): string => `RMB ${price.toLocaleString('en-U
         data-testid="reject-operation"
         type="button"
         :disabled="disabled"
-        @click="emit('reject', confirmation.id)"
+        @click="reject"
       >
         暂不加入
       </button>

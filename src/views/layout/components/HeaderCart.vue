@@ -5,14 +5,14 @@ const cartstore=useCartStore()
 
 <template>
   <div class="cart">
-    <a
+    <RouterLink
       class="curr"
-      href="/cartlist"
+      :to="{ name: 'cart' }"
       :aria-label="`购物车，共 ${cartstore.allcount} 件商品`"
     >
       <i class="iconfont icon-express-package" aria-hidden="true"></i>
       <em aria-hidden="true">{{ cartstore.allcount }}</em>
-    </a>
+    </RouterLink>
     <div class="layer">
       <div class="list">
 
