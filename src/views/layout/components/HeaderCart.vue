@@ -5,8 +5,13 @@ const cartstore=useCartStore()
 
 <template>
   <div class="cart">
-    <a class="curr" href="javascript:;">
-      <i class="iconfont icon-express-package"></i><em>{{ cartstore.cartList.length }}</em>
+    <a
+      class="curr"
+      href="/cartlist"
+      :aria-label="`购物车，共 ${cartstore.allcount} 件商品`"
+    >
+      <i class="iconfont icon-express-package" aria-hidden="true"></i>
+      <em aria-hidden="true">{{ cartstore.allcount }}</em>
     </a>
     <div class="layer">
       <div class="list">
