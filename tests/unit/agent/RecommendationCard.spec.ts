@@ -93,9 +93,14 @@ describe('RecommendationCard', () => {
     const wrapper = mount(RecommendationCard, {
       props: { recommendation: { ...recommendation, inventory: 0 } },
     })
+    const select = wrapper.get('button[data-testid="select-recommendation"]')
+    const accessibleName = select.attributes('aria-label') ?? ''
 
     expect(wrapper.get('[data-testid="stock"]').text()).toBe('Out of stock')
-    expect(wrapper.get('button[data-testid="select-recommendation"]').attributes())
-      .toHaveProperty('disabled')
+    expect(select.attributes()).toHaveProperty('disabled')
+    expect(accessibleName).toBe(
+      'Quiet Burr Grinder, Black / 220V, currently unavailable',
+    )
+    expect(accessibleName).not.toMatch(/choose|选择/i)
   })
 })

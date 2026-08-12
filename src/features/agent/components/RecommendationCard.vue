@@ -72,7 +72,9 @@ const stockText = (inventory: number): string => inventory > 0
       class="recommendation-card__select"
       data-testid="select-recommendation"
       type="button"
-      :aria-label="`Choose ${recommendation.name}, ${recommendation.attrsText}`"
+      :aria-label="recommendation.inventory > 0
+        ? `Choose ${recommendation.name}, ${recommendation.attrsText}`
+        : `${recommendation.name}, ${recommendation.attrsText}, currently unavailable`"
       :disabled="recommendation.inventory <= 0"
       @click="emit('select', props.recommendation)"
     >
