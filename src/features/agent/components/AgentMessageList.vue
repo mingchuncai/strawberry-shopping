@@ -1,17 +1,17 @@
 <script setup lang="ts">
+import { ref, useId, watch } from 'vue'
+
 import ProductComparison from './ProductComparison.vue'
 import RecommendationCard from './RecommendationCard.vue'
 import StreamingMessage from './StreamingMessage.vue'
+import type { AgentMessage } from '../protocol'
 import type { Recommendation, RecommendationGroup } from '../types'
 
-export interface PublicAgentMessage {
-  id: string
-  role: 'user' | 'assistant' | 'system-safe-summary'
-  content: string
-  completed: boolean
-}
+export type PublicAgentMessage = AgentMessage | (
+  Omit<AgentMessage, 'role'> & { role: 'user' | 'system-safe-summary' }
+)
 
-defineProps<{
+const props = defineProps<{
   messages: ReadonlyArray<PublicAgentMessage>
   recommendationGroups: ReadonlyArray<RecommendationGroup>
 }>()
@@ -25,6 +25,26 @@ const roleLabels: Record<PublicAgentMessage['role'], string> = {
   assistant: 'Berry',
   'system-safe-summary': 'System summary',
 }
+
+const completionAnnouncement = ref('')
+const headingPrefix = `agent-recommendation-${useId().replaceAll(':', '-')}`
+const groupHeadingId = (index: number): string => `${headingPrefix}-${index + 1}`
+
+watch(
+  () => props.messages,
+  (messages, previousMessages) => {
+    const completedMessages = messages.filter((message) => {
+      const previous = previousMessages.find((item) => item.id === message.id)
+      return message.completed && previous?.completed === false
+    })
+
+    if (completedMessages.length > 0) {
+      completionAnnouncement.value = completedMessages
+        .map((message) => `${roleLabels[message.role]} finished: ${message.content}`)
+        .join(' ')
+    }
+  },
+)
 </script>
 
 <template>
@@ -38,23 +58,22 @@ const roleLabels: Record<PublicAgentMessage['role'], string> = {
     >
       <p class="agent-message-list__role">{{ roleLabels[message.role] }}</p>
       <StreamingMessage :content="message.content" />
-      <p
-        v-if="message.completed"
-        class="agent-message-list__announcement"
-        data-testid="message-complete"
-        aria-live="polite"
-      >
-        {{ roleLabels[message.role] }} finished: {{ message.content }}
-      </p>
     </article>
 
+    <p
+      class="agent-message-list__announcement"
+      data-testid="message-complete"
+      aria-atomic="true"
+      aria-live="polite"
+    >{{ completionAnnouncement }}</p>
+
     <section
-      v-for="group in recommendationGroups"
-      :key="group.id"
+      v-for="(group, groupIndex) in recommendationGroups"
+      :key="`${group.id}-${groupIndex}`"
       class="agent-message-list__recommendations"
-      :aria-labelledby="`recommendation-group-${group.id}`"
+      :aria-labelledby="groupHeadingId(groupIndex)"
     >
-      <h2 :id="`recommendation-group-${group.id}`">{{ group.title }}</h2>
+      <h2 :id="groupHeadingId(groupIndex)">{{ group.title }}</h2>
 
       <div class="agent-message-list__cards">
         <RecommendationCard

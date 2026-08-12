@@ -69,6 +69,26 @@ describe('RecommendationCard', () => {
     })
   })
 
+  it('keeps native keyboard focus visible and activates the labelled product selection', () => {
+    const wrapper = mount(RecommendationCard, {
+      attachTo: document.body,
+      props: { recommendation },
+    })
+    const select = wrapper.get('button[data-testid="select-recommendation"]')
+
+    ;(select.element as HTMLButtonElement).focus()
+    expect(document.activeElement).toBe(select.element)
+    expect(select.attributes('aria-label')).toBe(
+      'Choose Quiet Burr Grinder, Black / 220V',
+    )
+    expect(recommendationCardSource).toMatch(
+      /\.recommendation-card :where\(a, button\):focus-visible[\s\S]*?outline:/,
+    )
+
+    ;(select.element as HTMLButtonElement).click()
+    expect(wrapper.emitted('select')).toEqual([[recommendation]])
+  })
+
   it('states when a product is out of stock and prevents proposal selection', () => {
     const wrapper = mount(RecommendationCard, {
       props: { recommendation: { ...recommendation, inventory: 0 } },
