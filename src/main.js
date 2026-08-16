@@ -18,3 +18,4 @@ app.use(componentPlugin);
 app.mount("#app");
 
 //no one is coming
+//some people want it all
