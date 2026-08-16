@@ -18,5 +18,5 @@ app.use(componentPlugin);
 app.mount("#app");
 
 //no one is coming
-//some people want it all
+//some people want it all im 44468
 //but I don't want nothing at all
