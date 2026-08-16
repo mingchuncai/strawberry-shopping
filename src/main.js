@@ -18,4 +18,4 @@ app.use(componentPlugin);
 app.mount("#app");
 
 //no one is coming
-//some people want it all
+//some people want it all im 10086
