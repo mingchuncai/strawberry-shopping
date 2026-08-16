@@ -19,3 +19,4 @@ app.mount("#app");
 
 //no one is coming
 //some people want it all
+//but I don't want nothing at all
